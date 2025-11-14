@@ -1,7 +1,7 @@
-#############################
-# Обновлен: 2025-11-14 16:32:44
-# Всего каналов: 10
-# Всего ссылок: 13
+#EXTM3U
+# Обновлен: 2025-11-14 16:44:02
+# Всего каналов: 1
+# Всего ссылок: 5
 
 #############################
 #EXTINF:-1 group-title="INFOℹ️" quality="medium" , ТГ канал https://t.me/NexusIPTVGroups
@@ -12,33 +12,13 @@ https://edge1.1internet.tv/
 https://edge1.1internet.tv/
 #############################
 
-
 #EXTINF:-1 group-title="Общие" quality="medium" , Первый канал
 https://edge1.1internet.tv/dash-live2/streams/1tv-dvr/1tvdash.mpd
-#EXTINF:-1 group-title="Общие" quality="medium" , Первый информационный (1080p)
+#EXTINF:-1 group-title="Общие" quality="low" , Первый Музыкальный Канал (576p)
+http://hz1.teleport.cc/HLS/SD.m3u8
+#EXTINF:-1 group-title="Общие" quality="low" , Первый информационный (1080p)
 https://ngtrk.dc.beltelecom.by/ngtrk/smil:informacionnyy.smil/playlist.m3u8
-#EXTINF:-1 group-title="Общие" quality="medium" , Первый информационный (1080p)
-https://ngtrk.dc.beltelecom.by/ngtrk/smil:informacionnyy.smil/playlist.m3u8
-#EXTINF:-1 group-title="Общие" quality="medium" , Первый Ярославский
+#EXTINF:-1 group-title="Общие" quality="low" , Первый Ярославский
 https://yaroslavl.mediacdn.ru/cdn/pervyaroslavsk/playlist.m3u8
-#EXTINF:-1 group-title="Общие" quality="medium" , Первый Ярославский
-https://yaroslavl.mediacdn.ru/cdn/pervyaroslavsk/playlist.m3u8
-#EXTINF:-1 group-title="Общие" quality="medium" , Первый Республиканский
+#EXTINF:-1 group-title="Общие" quality="low" , Первый Республиканский
 https://streaming.televizor-24-tochka.ru/live/27.m3u8
-#EXTINF:-1 group-title="Общие" quality="medium" , Первый Республиканский
-https://streaming.televizor-24-tochka.ru/live/27.m3u8
-#EXTINF:-1 group-title="Общие" quality="medium" , Россия К
-https://vgtrkregion-reg.cdnvideo.ru/vgtrk/0/kultura-hd/index.m3u8
-#EXTINF:-1 group-title="Общие" quality="medium" , Неизвестная Россия
-https://cdn.ntv.ru/unknown_russia/playlist.m3u8
-#EXTINF:-1 group-title="Общие" quality="medium" , Россия 24 (576p) [Not 24/7]
-https://uiptv.do.am/1ufc/000000006/playlist.m3u8
-#EXTINF:-1 group-title="Общие" quality="medium" , Россия 1
-https://vgtrkregion-reg.cdnvideo.ru/vgtrk/0/russia1-hd/index.m3u8
-#EXTINF:-1 group-title="Общие" quality="medium" , Русский Бестселлер
-http://31.148.48.15/Russkiy_Bestseller/index.m3u8
-#EXTINF:-1 group-title="Общие" quality="low" , ТНТ MUSIC
-https://cdn-01.bonus-tv.ru/tntmusic/playlist.m3u8
-
-
-
