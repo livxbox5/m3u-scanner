@@ -36,7 +36,9 @@ https://vgtrkregion-reg.cdnvideo.ru/vgtrk/0/russia1-hd/index.m3u8
 http://31.148.48.15/Russkiy_Bestseller/index.m3u8
 #EXTINF:-1 group-title="Общие" quality="medium" , Русский Бестселлер
 http://31.148.48.15/Russkiy_Bestseller/index.m3u8
-#EXTINF:-1 group-title="Детские" quality="medium" , Nickelodeon (576p)
+#EXTINF:-1 group-title="Общие" quality="medium" , Nickelodeon (576p)
 http://46.8.46.14/Nickelodeon/index.m3u8
-#EXTINF:-1 group-title="Музыкальные" quality="low" , Europa Plus TV
+#EXTINF:-1 group-title="Общие" quality="medium" , Europa Plus TV
 http://31.148.48.15/Europa_Plus_HD/index.m3u8
+#EXTINF:-1 group-title="Общие" quality="low" , ТНТ MUSIC
+https://cdn-01.bonus-tv.ru/tntmusic/playlist.m3u8
