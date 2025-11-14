@@ -1,11 +1,19 @@
 #EXTM3U
-# Обновлен: 2025-11-14 16:18:07
-# Всего каналов: 14
-# Всего ссылок: 18
+# Обновлен: 2025-11-14 16:32:44
+# Всего каналов: 10
+# Всего ссылок: 13
 
 #############################
+#EXTINF:-1 group-title="INFOℹ️" quality="medium" , ТГ канал https://t.me/NexusIPTVGroups
+https://edge1.1internet.tv/
+#EXTINF:-1 group-title="INFOℹ️" quality="medium" , ТГ канал https://t.me/NexusIPTVGroups
+https://edge1.1internet.tv/
+#EXTINF:-1 group-title="INFOℹ️" quality="medium" , GitHUB https://raw.githubusercontent.com/livxbox5/m3u-scanner/refs/heads/main/playlist/playlist.m3u
+https://edge1.1internet.tv/
+#############################
 
-#EXTINF:-1 group-title="Новостные" quality="medium" , Первый канал
+
+#EXTINF:-1 group-title="Общие" quality="medium" , Первый канал
 https://edge1.1internet.tv/dash-live2/streams/1tv-dvr/1tvdash.mpd
 #EXTINF:-1 group-title="Общие" quality="medium" , Первый информационный (1080p)
 https://ngtrk.dc.beltelecom.by/ngtrk/smil:informacionnyy.smil/playlist.m3u8
@@ -29,5 +37,6 @@ https://uiptv.do.am/1ufc/000000006/playlist.m3u8
 https://vgtrkregion-reg.cdnvideo.ru/vgtrk/0/russia1-hd/index.m3u8
 #EXTINF:-1 group-title="Общие" quality="medium" , Русский Бестселлер
 http://31.148.48.15/Russkiy_Bestseller/index.m3u8
-
+#EXTINF:-1 group-title="Общие" quality="low" , ТНТ MUSIC
+https://cdn-01.bonus-tv.ru/tntmusic/playlist.m3u8
 
