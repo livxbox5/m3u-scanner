@@ -1,0 +1,39 @@
+# pip install -r requirements.txt
+# Requirements for M3UScanner
+# Python 3.6+
+
+# Основные зависимости для работы сканера:
+requests>=2.31.0
+beautifulsoup4>=4.12.2
+lxml>=4.9.3
+urllib3>=1.26.0
+
+# Для работы с прокси и сетевыми запросами:
+PySocks>=1.7.1
+fake-useragent>=1.4.0
+
+# Для улучшенной обработки данных (опционально):
+python-dateutil>=2.8.2
+chardet>=5.2.0
+
+# Для возможного будущего GUI (опционально):
+# tkinter  # обычно входит в стандартную поставку Python
+
+# Стандартные библиотеки Python (обычно уже установлены):
+# urllib.request
+# re
+# time
+# sys
+# os
+# ssl
+# urllib.parse
+# concurrent.futures
+# json
+# random
+# threading
+
+# Для установки всех зависимостей выполните:
+# pip install -r requirements.txt
+
+# Для минимальной установки (только самое необходимое):
+# pip install requests beautifulsoup4 lxml

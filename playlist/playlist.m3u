@@ -1,0 +1,43 @@
+#EXTM3U
+# Обновлен: 2025-11-14 16:18:07
+# Всего каналов: 14
+# Всего ссылок: 18
+
+#############################
+
+#EXTINF:-1 group-title="Общие" quality="medium" , Первый канал
+https://edge1.1internet.tv/dash-live2/streams/1tv-dvr/1tvdash.mpd
+#EXTINF:-1 group-title="Общие" quality="medium" , Первый Музыкальный Канал (576p)
+http://hz1.teleport.cc/HLS/SD.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" , Первый Музыкальный Канал (576p)
+http://hz1.teleport.cc/HLS/SD.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" , Первый информационный (1080p)
+https://ngtrk.dc.beltelecom.by/ngtrk/smil:informacionnyy.smil/playlist.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" , Первый информационный (1080p)
+https://ngtrk.dc.beltelecom.by/ngtrk/smil:informacionnyy.smil/playlist.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" , Первый Ярославский
+https://yaroslavl.mediacdn.ru/cdn/pervyaroslavsk/playlist.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" , Первый Ярославский
+https://yaroslavl.mediacdn.ru/cdn/pervyaroslavsk/playlist.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" , Первый Республиканский
+https://streaming.televizor-24-tochka.ru/live/27.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" , Первый Республиканский
+https://streaming.televizor-24-tochka.ru/live/27.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" , Россия К
+https://vgtrkregion-reg.cdnvideo.ru/vgtrk/0/kultura-hd/index.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" , Неизвестная Россия
+https://cdn.ntv.ru/unknown_russia/playlist.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" , Россия 24 (576p) [Not 24/7]
+https://uiptv.do.am/1ufc/000000006/playlist.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" , Россия 1
+https://vgtrkregion-reg.cdnvideo.ru/vgtrk/0/russia1-hd/index.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" , Русский Бестселлер
+http://31.148.48.15/Russkiy_Bestseller/index.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" , ТНТ MUSIC
+https://cdn-01.bonus-tv.ru/tntmusic/playlist.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" , ТНТ4 International
+https://cdn4.skygo.mn/live/disk1/TNT4/HLSv3-FTA/TNT4.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" , ТНТ International
+https://cdn4.skygo.mn/live/disk1/THT/HLSv3-FTA/THT.m3u8
+#EXTINF:-1 group-title="Общие" quality="low" , Русский Бестселлер
+http://31.148.48.15/Russkiy_Bestseller/index.m3u8
