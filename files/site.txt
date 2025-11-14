@@ -7,7 +7,6 @@ https://google.com/
 https://duckduckgo.com/
 https://bing.com/
 https://yahoo.com/
-https://ask.com/
 https://baidu.com/
 https://aol.com/
 https://wolframalpha.com/
@@ -372,3 +371,9 @@ https://github.com/iptv-org/iptv-part
 https://github.com/iptv-org/iptv-piece
 https://github.com/iptv-org/iptv-bit
 https://github.com/iptv-org/iptv-byte
+https://raw.githubusercontent.com
+https://github.com
+https://iptv-org.github.io
+https://www.disney.com
+https://disneynow.com
+https://youtube.com
