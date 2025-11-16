@@ -722,7 +722,7 @@ class OnlineM3UScanner:
         # Сортируем потоки по оценке качества перед проверкой
         sorted_streams = sorted(streams, key=lambda x: x.get('quality_score', 0), reverse=True)
 
-        # Используем многопоточность для проверки
+        # Используем многопоточность для проверка
         with ThreadPoolExecutor(max_workers=3) as executor:
             future_to_stream = {executor.submit(self.check_single_stream, stream): stream for stream in sorted_streams}
 
@@ -745,7 +745,7 @@ class OnlineM3UScanner:
         print(f"\n🚀 Запуск ТОЧНОГО поиска: '{channel_name}'")
         print("⏳ Это может занять 1-2 минуты...")
 
-        # Загружаем существующие каналы ДО поиска
+        # Загружаем существующие каналы ДО поиска (только динамическую часть)
         existing_channels = self.load_existing_channels()
 
         # Ищем точное совпадение названия (с учетом регистра)
@@ -823,7 +823,7 @@ class OnlineM3UScanner:
             print(f"⏱️  Время поиска: {search_time:.1f} секунд")
             print("=" * 50)
 
-            # Обновляем канал в плейлисте
+            # Обновляем канал в плейлисте (только динамическую часть)
             success = self.update_channel_in_playlist(final_channel_name, combined_streams)
 
             if success:
@@ -865,7 +865,8 @@ class OnlineM3UScanner:
         return merged
 
     def update_channel_in_playlist(self, channel_name, new_streams):
-        """Обновляет канал в плейлисте с проверкой на пустые списки"""
+        """Обновляет канал в динамической части плейлиста"""
+        # Загружаем существующие каналы (только динамическую часть)
         existing_channels = self.load_existing_channels()
 
         if new_streams:
@@ -880,17 +881,19 @@ class OnlineM3UScanner:
         return self.save_full_playlist(existing_channels)
 
     def load_existing_channels(self):
-        """Загружает существующие каналы из плейлиста"""
+        """Загружает существующие каналы только из ДИНАМИЧЕСКОЙ части плейлиста (после разделителя)"""
         channels = {}
         if os.path.exists(self.playlist_file):
             try:
                 with open(self.playlist_file, 'r', encoding='utf-8') as f:
                     content = f.read()
 
+                # Находим разделитель #############################
                 parts = content.split('#############################')
-                if len(parts) > 1:
-                    channels_content = parts[1]
-                    lines = channels_content.split('\n')
+                if len(parts) > 2:
+                    # Берем только часть ПОСЛЕ второго разделителя (динамическая часть)
+                    dynamic_content = parts[2]
+                    lines = dynamic_content.split('\n')
 
                     i = 0
                     current_stream = None
@@ -915,29 +918,42 @@ class OnlineM3UScanner:
                                         'group': current_stream.get('group-title', 'Общие'),
                                         'tvg_id': current_stream.get('tvg-id', ''),
                                         'tvg_logo': current_stream.get('tvg-logo', ''),
-                                        'quality': 'medium'  # По умолчанию
+                                        'quality': 'medium'
                                     })
                                     i += 1
                         i += 1
 
             except Exception as e:
-                print(f"❌ Ошибка загрузки плейлиста: {e}")
+                print(f"❌ Ошибка загрузки динамической части плейлиста: {e}")
 
         return channels
 
     def save_full_playlist(self, channels_dict):
-        """Сохраняет полный плейлист БЕЗ информационных каналов"""
+        """Сохраняет полный плейлист с сохранением СТАТИЧЕСКОЙ части"""
         try:
             os.makedirs(os.path.dirname(self.playlist_file), exist_ok=True)
 
+            # Читаем существующий плейлист для сохранения статической части
+            static_content = ""
+            if os.path.exists(self.playlist_file):
+                with open(self.playlist_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    parts = content.split('#############################')
+                    if len(parts) >= 2:
+                        # Сохраняем все до второго разделителя (статическая часть)
+                        static_content = '#############################'.join(parts[:2]) + '#############################\n\n'
+                    else:
+                        # Если нет разделителей, создаем базовую статическую часть
+                        static_content = self.create_default_static_content()
+            else:
+                # Создаем новую статическую часть
+                static_content = self.create_default_static_content()
+
             with open(self.playlist_file, 'w', encoding='utf-8') as f:
-                f.write('#EXTM3U\n')
-                f.write(f"# Обновлен: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write(f"# Всего каналов: {len(channels_dict)}\n")
-                f.write(f"# Всего ссылок: {sum(len(streams) for streams in channels_dict.values())}\n\n")
+                # Записываем статическую часть (НЕ ТРОГАЕМ)
+                f.write(static_content)
 
-                f.write('#############################\n\n')
-
+                # Сохраняем все каналы только в ДИНАМИЧЕСКОЙ части
                 for channel_name, streams in channels_dict.items():
                     for stream in streams:
                         extinf_parts = ['#EXTINF:-1']
@@ -949,7 +965,6 @@ class OnlineM3UScanner:
                         if stream.get('group'):
                             extinf_parts.append(f'group-title="{stream["group"]}"')
 
-                        # Добавляем информацию о качестве
                         quality = stream.get('quality', '')
                         if quality:
                             extinf_parts.append(f'quality="{quality}"')
@@ -959,21 +974,39 @@ class OnlineM3UScanner:
                         f.write(f'{stream["url"]}\n')
 
             print(f"💾 Плейлист сохранен: {self.playlist_file}")
-            print(f"📊 Всего каналов: {len(channels_dict)}")
+            print(f"📊 Всего каналов в динамической части: {len(channels_dict)}")
             return True
 
         except Exception as e:
             print(f"❌ Ошибка сохранения: {e}")
             return False
 
+    def create_default_static_content(self):
+        """Создает стандартную СТАТИЧЕСКУЮ часть плейлиста"""
+        return f'''#EXTM3U
+# Обновлен: {time.strftime('%Y-%m-%d %H:%M:%S')}
+# Статическая часть - НЕ ТРОГАТЬ!
+# Динамическая часть ниже
+
+#############################
+#EXTINF:-1 group-title="Информационные" quality="high", ТГ канал https://t.me/NexusIPTVGroups
+https://edge1.1internet.tv/
+#EXTINF:-1 group-title="Информационные" quality="high", Поддержка проекта
+https://edge1.1internet.tv/
+#EXTINF:-1 group-title="Информационные" quality="high", GitHub проекта
+https://edge1.1internet.tv/
+#############################
+
+'''
+
     def refresh_all_channels(self):
-        """Обновляет все каналы в плейлисте"""
-        print("🔄 ЗАПУСК ПОЛНОГО ОБНОВЛЕНИЯ ВСЕХ КАНАЛОВ...")
+        """Обновляет все каналы в ДИНАМИЧЕСКОЙ части плейлиста"""
+        print("🔄 ЗАПУСК ПОЛНОГО ОБНОВЛЕНИЯ ВСЕХ КАНАЛОВ (динамическая часть)...")
 
         existing_channels = self.load_existing_channels()
 
         if not existing_channels:
-            print("❌ В плейлисте нет каналов для обновления")
+            print("❌ В динамической части плейлиста нет каналов для обновления")
             return
 
         print(f"📊 Найдено каналов для обновления: {len(existing_channels)}")
@@ -1013,7 +1046,7 @@ class OnlineM3UScanner:
                 continue
 
         if self.save_full_playlist(existing_channels):
-            print(f"\n🎉 ОБНОВЛЕНИЕ ЗАВЕРШЕНО!")
+            print(f"\n🎉 ОБНОВЛЕНИЕ ДИНАМИЧЕСКОЙ ЧАСТИ ЗАВЕРШЕНО!")
             print(f"✅ Обновлено каналов: {updated_count}")
             print(f"❌ Удалено каналов: {failed_count}")
         else:
@@ -1041,7 +1074,7 @@ class OnlineM3UScanner:
         return working_streams
 
     def search_from_channels_list(self):
-        """Поиск каналов из списка в файле Channels.txt"""
+        """Поиск каналов из списка в файле Channels.txt (добавляются в динамическую часть)"""
         if not self.channels_list:
             print("❌ Список каналов пуст. Добавьте каналы в файл Channels.txt")
             return
@@ -1078,22 +1111,23 @@ class OnlineM3UScanner:
         print(f"\n🎉 ПОИСК ПО СПИСКУ ЗАВЕРШЕН!")
         print(f"✅ Успешно найдено: {success_count} каналов")
         print(f"❌ Не найдено: {failed_count} каналов")
-        print(f"📊 Общее качество плейлиста улучшено!")
+        print(f"📊 Все каналы добавлены в динамическую часть плейлиста")
 
 def interactive_mode():
     """Интерактивный режим работы"""
     scanner = OnlineM3UScanner()
 
     print("🎬" + "=" * 70)
-    print("🌐 SMART M3U SCANNER - ТОЧНАЯ ВЕРСИЯ")
-    print("🎯 УЛУЧШЕННЫЙ ПОИСК КАЧЕСТВЕННЫХ КАНАЛОВ")
+    print("🌐 SMART M3U SCANNER - РАЗДЕЛЕННАЯ ВЕРСИЯ")
+    print("🎯 СТАТИЧЕСКАЯ + ДИНАМИЧЕСКАЯ ЧАСТИ")
     print("🎬" + "=" * 70)
     print("📡 Поиск рабочих M3U и M3U8 потоков")
     print(f"📁 Источники: {len(scanner.custom_sites)} сайтов")
     print(f"📂 Категории: {len(scanner.channel_categories)}")
     print(f"📺 Каналы для поиска: {len(scanner.channels_list)}")
     print(f"💾 Результаты: {scanner.playlist_file}")
-    print("💡 ТОЧНЫЙ поиск с фильтрацией качества")
+    print("💡 СТАТИЧЕСКАЯ часть защищена от изменений")
+    print("💡 ДИНАМИЧЕСКАЯ часть автоматически обновляется")
     print("=" * 70)
 
     # Проверяем наличие ffmpeg
@@ -1110,16 +1144,16 @@ def interactive_mode():
     if existing_channels:
         total_streams = sum(len(streams) for streams in existing_channels.values())
         high_quality = sum(1 for streams in existing_channels.values() for s in streams if s.get('quality') in ['high', 'medium'])
-        print(f"📊 В плейлисте: {len(existing_channels)} каналов, {total_streams} ссылок")
+        print(f"📊 В динамической части: {len(existing_channels)} каналов, {total_streams} ссылок")
         print(f"🎯 Качественных потоков: {high_quality}")
     else:
-        print("📝 Плейлист будет создан при первом поиске")
+        print("📝 Динамическая часть будет создана при первом поиске")
 
     while True:
         print("\n" + "🎯" + "=" * 60)
-        print("1. 🔍 Поиск и обновление одного канала")
-        print("2. 📋 Поиск по списку из файла Channels.txt")
-        print("3. 🔄 Полное обновление всех каналов")
+        print("1. 🔍 Поиск и обновление одного канала (в динамическую часть)")
+        print("2. 📋 Поиск по списку из файла Channels.txt (в динамическую часть)")
+        print("3. 🔄 Полное обновление динамической части")
         print("4. 📊 Статистика плейлиста")
         print("5. 🚪 Выход")
 
@@ -1150,13 +1184,13 @@ def interactive_mode():
             if existing_channels:
                 total_streams = sum(len(streams) for streams in existing_channels.values())
                 high_quality = sum(1 for streams in existing_channels.values() for s in streams if s.get('quality') in ['high', 'medium'])
-                print(f"\n📊 СТАТИСТИКА ПЛЕЙЛИСТА:")
+                print(f"\n📊 СТАТИСТИКА ДИНАМИЧЕСКОЙ ЧАСТИ:")
                 print(f"📁 Каналов: {len(existing_channels)}")
                 print(f"🔗 Всего ссылок: {total_streams}")
                 print(f"🎯 Качественных потоков: {high_quality}")
                 print(f"📈 Эффективность: {(high_quality/total_streams*100 if total_streams > 0 else 0):.1f}%")
             else:
-                print("📝 Плейлист пуст")
+                print("📝 Динамическая часть пуста")
 
         elif choice == '5' or choice.lower() == 'exit':
             print("👋 Выход из программы...")
@@ -1178,7 +1212,7 @@ def main():
             print(f"❌ Не удалось запустить графический интерфейс: {e}")
             print("📝 Убедитесь, что файл Interface.py находится в той же папке")
     else:
-        print("🌐 Smart M3U Scanner - Точная версия")
+        print("🌐 Smart M3U Scanner - Разделенная версия")
         print("Использование:")
         print("  python M3UScanner.py          - Консольный режим")
         print("  python M3UScanner.py --gui    - Графический интерфейс")
