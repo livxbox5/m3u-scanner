@@ -1,6 +1,6 @@
 #EXTM3U
-# Обновлен: 2025-11-14 16:44:02
-# Всего каналов: 1
+# Обновлен: 2025-11-17 14:44:41
+# Всего каналов: 13
 # Всего ссылок: 5
 
 #############################
@@ -37,3 +37,4 @@ http://31.148.48.15/Europa_Plus_HD/index.m3u8
 https://cdn-01.bonus-tv.ru/tntmusic/playlist.m3u8
 #EXTINF:-1 group-title="Музыкальные" quality="low" , Музыка Первого
 http://31.148.48.15/Muzika_Pervogo/index.m3u8
+
