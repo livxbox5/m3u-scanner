@@ -1,6 +1,22 @@
 # Список сайтов для поиска M3U плейлистов
 # Добавьте свои сайты (по одному на строку)
 
+# ==================== Официальные Сайты ====================
+https://www.1tv.ru/
+https://smotrim.ru/
+https://2.russia.tv/
+https://tvkultura.ru/
+https://ctc.ru/
+https://ctckids.ru/
+https://tnt-online.ru/
+https://tntmusic.ru/
+https://europaplus.ru/
+https://fox.com/
+https://livenowfox.com/
+https://bestrussia.tv/
+https://rudetective.tv/
+https://strashnoe.tv/
+
 # ==================== ПОИСКОВЫЕ СИСТЕМЫ ====================
 https://yandex.ru/
 https://google.com/
