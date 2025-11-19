@@ -28,12 +28,6 @@ class OnlineM3UScanner:
 
         # Улучшенные источники для поиска
         self.search_sources = [
-            "https://raw.githubusercontent.com/iptv-org/iptv/master/channels.m3u",
-            "https://raw.githubusercontent.com/iptv-org/iptv/master/channels/ru.m3u",
-            "https://iptv-org.github.io/iptv/countries/ru.m3u",
-            "https://raw.githubusercontent.com/Free-IPTV/Countries/master/RU.m3u",
-            "https://raw.githubusercontent.com/gglabs/iptv/master/index.m3u",
-            "https://raw.githubusercontent.com/ivanskod/iptv/main/iptv.m3u",
         ]
 
         # Автоматически добавляем ffmpeg в PATH
@@ -275,6 +269,11 @@ class OnlineM3UScanner:
 
                 # Прогрессивный таймаут
                 current_timeout = min(self.timeout * (attempt + 1), 30)
+
+                # Выводим информацию о попытке для длинных операций
+                if attempt > 0:
+                    print(f"         ⏳ Повторная попытка {attempt + 1}/{max_retries} для {self.get_source_name(url)}")
+
                 response = urllib.request.urlopen(req, timeout=current_timeout)
                 response_time = time.time() - start_time
 
@@ -287,22 +286,22 @@ class OnlineM3UScanner:
 
             except urllib.error.HTTPError as e:
                 if e.code in [403, 404, 429]:
-                    print(f"   ⚠️ HTTP {e.code} для {url}, пропускаем")
+                    print(f"         ⚠️ HTTP {e.code} для {self.get_source_name(url)}, пропускаем")
                     return None
                 elif attempt == max_retries - 1:
-                    print(f"   ❌ Ошибка HTTP после {max_retries} попыток: {e}")
+                    print(f"         ❌ Ошибка HTTP после {max_retries} попыток: {e}")
                     self.stats['failed_requests'] += 1
                     return None
 
             except Exception as e:
                 if attempt == max_retries - 1:
-                    print(f"   ❌ Ошибка после {max_retries} попыток: {e}")
+                    print(f"         ❌ Ошибка после {max_retries} попыток для {self.get_source_name(url)}: {e}")
                     self.stats['failed_requests'] += 1
                     return None
 
                 # Прогрессивная задержка между попытками
-                delay = min(2 ** attempt, 10)  # Экспоненциальная backoff, максимум 10 секунд
-                print(f"   ⏳ Попытка {attempt + 1}/{max_retries} не удалась, ждем {delay} сек...")
+                delay = min(2 ** attempt, 10)
+                print(f"         ⏳ Попытка {attempt + 1}/{max_retries} не удалась, ждем {delay} сек...")
                 time.sleep(delay)
 
         return None
@@ -370,34 +369,47 @@ class OnlineM3UScanner:
         return list(found_urls)
 
     def scan_site_for_m3u(self, site_url, channel_name):
-        """Сканирует сайт на наличие M3U и M3U8 плейлистов"""
+        """Сканирует сайт на наличие M3U и M3U8 плейлистов с улучшенной обработкой ошибок"""
         found_urls = set()
 
         try:
+            print(f"         📡 Загрузка страницы: {self.get_source_name(site_url)}")
             response = self.make_request(site_url)
             if response:
                 content = response.read().decode('utf-8', errors='ignore')
+                print(f"         ✅ Страница загружена ({len(content)} байт)")
 
                 # Ищем прямые M3U8 ссылки
                 m3u8_urls = re.findall(r'https?://[^\s"\'<>]+\.m3u8', content)
-                found_urls.update(m3u8_urls[:10])  # Ограничиваем количество
+                found_urls.update(m3u8_urls[:10])
+                if m3u8_urls:
+                    print(f"         🔗 Найдено M3U8 ссылок: {len(m3u8_urls)}")
 
                 # Ищем прямые M3U ссылки
                 m3u_urls = re.findall(r'https?://[^\s"\'<>]+\.m3u', content)
                 found_urls.update(m3u_urls[:10])
+                if m3u_urls:
+                    print(f"         🔗 Найдено M3U ссылок: {len(m3u_urls)}")
 
                 # Ищем ссылки на плейлисты в href
                 playlist_urls = re.findall(r'href="([^"]+\.m3u8?)"', content, re.IGNORECASE)
-                for url in playlist_urls[:10]:  # Ограничиваем количество
+                for url in playlist_urls[:10]:
                     if url.startswith('/'):
                         full_url = urljoin(site_url, url)
                         found_urls.add(full_url)
                     elif url.startswith('http'):
                         found_urls.add(url)
 
-        except Exception as e:
-            print(f"   ⚠️ Ошибка сканирования {site_url}: {e}")
+                if playlist_urls:
+                    print(f"         🔗 Найдено ссылок в href: {len(playlist_urls)}")
 
+            else:
+                print(f"         ❌ Не удалось загрузить страницу")
+
+        except Exception as e:
+            print(f"         ⚠️ Ошибка сканирования: {e}")
+
+        print(f"         📊 Всего найдено URL: {len(found_urls)}")
         return list(found_urls)
 
     def download_playlist(self, url):
@@ -413,69 +425,222 @@ class OnlineM3UScanner:
             return None
 
     def search_iptv_sources(self, channel_name):
-        """Поиск в специализированных IPTV источниках"""
-        iptv_sources = [
-            "https://iptv-org.github.io/iptv/categories/entertainment.m3u",
-            "https://iptv-org.github.io/iptv/categories/news.m3u",
-            "https://iptv-org.github.io/iptv/categories/sports.m3u",
-            "https://raw.githubusercontent.com/Free-IPTV/Countries/master/RU.m3u",
-            "https://raw.githubusercontent.com/ivanskod/iptv/main/iptv.m3u",
-        ]
+        """Поиск в специализированных IPTV источниках из файла site.txt"""
+        print("   📡 Поиск в IPTV источниках из site.txt...")
 
         streams = []
+        iptv_sources_processed = 0
+
+        # Фильтруем только IPTV и M3U источники из custom_sites
+        iptv_sources = []
+        for site in self.custom_sites:
+            # Ищем источники, которые содержат ключевые слова для IPTV/M3U
+            if any(keyword in site.lower() for keyword in [
+                'iptv', 'm3u', 'github.com/iptv', 'stream', 'live',
+                'iptv-org', 'raw.githubusercontent.com', '.m3u'
+            ]):
+                iptv_sources.append(site)
+
+        # Ограничиваем количество источников для стабильности
+        iptv_sources = iptv_sources[:15]
+
+        print(f"      📊 Найдено {len(iptv_sources)} IPTV источников в site.txt")
+
         for source in iptv_sources:
             try:
-                print(f"      📥 Загружаем: {source.split('/')[-1]}")
-                content = self.download_playlist(source)
-                if content:
-                    found = self.extract_channels_from_playlist(content, channel_name)
-                    streams.extend(found)
-                    print(f"      ✅ Найдено {len(found)} потоков")
-                else:
-                    print(f"      ❌ Источник недоступен")
+                iptv_sources_processed += 1
+
+                # Улучшенное получение названия источника
+                source_name = self.get_source_name(source)
+                print(f"      🔍 Обрабатываем: {source_name}")
+
+                # Для GitHub и прямых M3U ссылок - загружаем плейлист
+                if any(ext in source.lower() for ext in ['.m3u', '.m3u8']):
+                    print(f"      📥 Загружаем M3U: {source_name}")
+                    content = self.download_playlist(source)
+                    if content:
+                        found = self.extract_channels_from_playlist(content, channel_name)
+                        streams.extend(found)
+                        print(f"      ✅ Найдено {len(found)} потоков")
+                    else:
+                        print(f"      ❌ M3U недоступен")
+
+                # Для GitHub страниц - ищем ссылки на M3U файлы
+                elif 'github.com' in source.lower() and 'iptv' in source.lower():
+                    print(f"      🔍 Сканируем GitHub: {source_name}")
+                    github_urls = self.scan_github_for_m3u(source, channel_name)
+                    for m3u_url in github_urls:
+                        content = self.download_playlist(m3u_url)
+                        if content:
+                            found = self.extract_channels_from_playlist(content, channel_name)
+                            streams.extend(found)
+                            if found:
+                                print(f"      ✅ Найдено {len(found)} потоков в {m3u_url.split('/')[-1]}")
+
+                # Для других IPTV сайтов - сканируем на наличие M3U ссылок
+                elif any(keyword in source.lower() for keyword in ['iptv', 'stream']):
+                    print(f"      🌐 Сканируем сайт: {source_name}")
+                    try:
+                        m3u_urls = self.scan_site_for_m3u(source, channel_name)
+                        valid_streams = self.quick_check_urls(m3u_urls, channel_name)
+                        streams.extend(valid_streams)
+                        if valid_streams:
+                            print(f"      ✅ Найдено {len(valid_streams)} потоков")
+                        else:
+                            print(f"      ℹ️  Потоков не найдено")
+                    except Exception as e:
+                        print(f"      ⚠️ Ошибка сканирования сайта: {e}")
+
+                # Небольшая задержка между источниками для стабильности
+                time.sleep(0.5)
+
             except Exception as e:
                 print(f"      ⚠️ Ошибка в источнике {source}: {e}")
                 continue
+
+        print(f"      📊 Обработано IPTV источников: {iptv_sources_processed}")
         return streams
+
+    def get_source_name(self, url):
+        """Улучшенное получение читаемого имени источника"""
+        try:
+            # Убираем протокол и www
+            clean_url = re.sub(r'^https?://(www\.)?', '', url)
+
+            # Берем только домен и первую часть пути
+            parts = clean_url.split('/')
+            if len(parts) > 1:
+                # Для GitHub показываем владельца и репозиторий
+                if 'github.com' in url:
+                    if len(parts) >= 3:
+                        return f"github.com/{parts[1]}/{parts[2]}"
+
+                # Для других сайтов показываем домен и первую значимую часть пути
+                domain = parts[0]
+                if len(parts) > 1 and parts[1]:
+                    return f"{domain}/{parts[1]}"
+                return domain
+            else:
+                return clean_url
+        except:
+            return url[:30] + "..." if len(url) > 30 else url
+
+    def scan_github_for_m3u(self, github_url, channel_name):
+        """Сканирует GitHub репозитории на наличие M3U файлов"""
+        m3u_urls = []
+
+        try:
+            # Если это основная страница репозитория IPTV-org
+            if 'iptv-org.github.io' in github_url:
+                # Получаем основные категории
+                categories = ['news', 'sports', 'entertainment', 'kids', 'music', 'movies']
+                for category in categories:
+                    m3u_url = f"https://iptv-org.github.io/iptv/categories/{category}.m3u"
+                    m3u_urls.append(m3u_url)
+
+            # Если это raw GitHub URL
+            elif 'raw.githubusercontent.com' in github_url and github_url.endswith('.m3u'):
+                m3u_urls.append(github_url)
+
+            # Если это страница GitHub репозитория
+            elif 'github.com' in github_url and '/blob/' in github_url:
+                # Конвертируем в raw URL
+                raw_url = github_url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
+                if raw_url.endswith('.m3u') or raw_url.endswith('.m3u8'):
+                    m3u_urls.append(raw_url)
+
+            # Если это основная страница репозитория
+            elif 'github.com' in github_url and '/tree/' not in github_url:
+                # Пробуем найти README или основные M3U файлы
+                repo_parts = github_url.replace('https://github.com/', '').split('/')
+                if len(repo_parts) >= 2:
+                    owner, repo = repo_parts[0], repo_parts[1]
+                    possible_files = [
+                        f"https://raw.githubusercontent.com/{owner}/{repo}/main/README.md",
+                        f"https://raw.githubusercontent.com/{owner}/{repo}/master/README.md",
+                        f"https://raw.githubusercontent.com/{owner}/{repo}/main/playlist.m3u",
+                        f"https://raw.githubusercontent.com/{owner}/{repo}/master/playlist.m3u"
+                    ]
+
+                    for file_url in possible_files:
+                        response = self.make_request(file_url, 'GET', max_retries=1)
+                        if response and response.getcode() == 200:
+                            if file_url.endswith('.m3u'):
+                                m3u_urls.append(file_url)
+                            else:
+                                # Сканируем README на наличие M3U ссылок
+                                content = response.read().decode('utf-8', errors='ignore')
+                                found_urls = re.findall(r'https?://[^\s"\'<>]+\.m3u8?', content)
+                                m3u_urls.extend(found_urls[:5])  # Ограничиваем количество
+
+        except Exception as e:
+            print(f"      ⚠️ Ошибка сканирования GitHub: {e}")
+
+        return m3u_urls[:10]  # Ограничиваем количество URL
 
     def search_in_online_sources(self, channel_name):
         """Улучшенный поиск канала в интернете с лучшей стабильностью"""
         print(f"🌐 Запуск расширенного поиска для канала: '{channel_name}'")
         all_streams = []
 
-        # 1. Проверка базовых источников
-        print("   📡 Этап 1/3: Проверка базовых источников...")
-        for i, source_url in enumerate(self.search_sources, 1):
-            try:
-                print(f"      🔍 Проверяем источник {i}/{len(self.search_sources)}: {source_url.split('/')[-1]}")
-                playlist_content = self.download_playlist(source_url)
-                if playlist_content:
-                    found_streams = self.extract_channels_from_playlist(playlist_content, channel_name)
-                    all_streams.extend(found_streams)
-                    print(f"      ✅ Найдено {len(found_streams)} потоков")
-                else:
-                    print(f"      ❌ Источник недоступен")
-                time.sleep(1)  # Задержка между источниками
-            except Exception as e:
-                print(f"      ⚠️ Ошибка: {e}")
-                continue
-
-        # 2. Поиск в специализированных IPTV источниках
-        print("   🔍 Этап 2/3: Поиск в IPTV источниках...")
+        # 1. Поиск в специализированных IPTV источниках из site.txt
+        print("   🔍 Этап 1/3: Поиск в IPTV источниках из site.txt...")
         iptv_streams = self.search_iptv_sources(channel_name)
         all_streams.extend(iptv_streams)
         print(f"      ✅ Найдено {len(iptv_streams)} IPTV потоков")
 
-        # 3. Поиск на пользовательских сайтах
-        print("   🌐 Этап 3/3: Поиск на пользовательских сайтах...")
+        # 2. Поиск на пользовательских сайтах (не IPTV)
+        print("   🌐 Этап 2/3: Поиск на общих сайтах из site.txt...")
         custom_urls = self.search_custom_sites(channel_name)
         valid_streams = self.quick_check_urls(custom_urls, channel_name)
         all_streams.extend(valid_streams)
         print(f"      ✅ Найдено {len(valid_streams)} потоков с сайтов")
 
+        # 3. Поиск в поисковых системах
+        print("   🔎 Этап 3/3: Поиск в поисковых системах...")
+        search_engine_urls = self.search_on_search_engines(channel_name)
+        search_streams = self.quick_check_urls(search_engine_urls, channel_name)
+        all_streams.extend(search_streams)
+        print(f"      ✅ Найдено {len(search_streams)} потоков с поисковиков")
+
         print(f"   📊 ИТОГО: найдено {len(all_streams)} потенциальных потоков")
 
         return all_streams
+
+    def search_on_search_engines(self, channel_name):
+        """Поиск через поисковые системы из site.txt"""
+        search_urls = []
+
+        # Фильтруем поисковые системы из custom_sites
+        search_engines = [
+            site for site in self.custom_sites
+            if any(engine in site for engine in [
+                'yandex.ru', 'google.com', 'bing.com', 'duckduckgo.com'
+            ])
+        ]
+
+        for engine in search_engines[:3]:  # Ограничиваем количество
+            try:
+                if 'yandex.ru' in engine:
+                    search_url = f"https://yandex.ru/search/?text={quote(channel_name + ' m3u8 live stream')}"
+                    response = self.make_request(search_url)
+                    if response:
+                        content = response.read().decode('utf-8', errors='ignore')
+                        m3u_urls = re.findall(r'https?://[^\s"<>]+\.m3u8?', content)
+                        search_urls.extend(m3u_urls[:3])
+
+                elif 'google.com' in engine:
+                    search_url = f"https://www.google.com/search?q={quote(channel_name + ' m3u8 iptv live')}"
+                    response = self.make_request(search_url)
+                    if response:
+                        content = response.read().decode('utf-8', errors='ignore')
+                        m3u_urls = re.findall(r'https?://[^\s"<>]+\.m3u8?', content)
+                        search_urls.extend(m3u_urls[:3])
+
+            except Exception as e:
+                print(f"      ⚠️ Ошибка поиска на {engine}: {e}")
+
+        return search_urls
 
     def quick_check_urls(self, urls, channel_name):
         """Улучшенная быстрая проверка URL с ограничением"""
