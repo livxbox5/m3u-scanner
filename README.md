@@ -6,4 +6,5 @@
 и надо 
 Python https://www.python.org/  и Установить Библотики pip install -r requirements.txt
 
-Открыть CMD (Windows 10 22h2 ) или терминал (Windows 11 25h2 ) или актуальная версиия ОП
+Открыть CMD (Windows 10 22h2 ) или терминал (Windows 11 25h2 ) или на актуальная версиия ОС
+запуск проекта py M3UScanner.py
