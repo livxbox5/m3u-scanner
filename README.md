@@ -30,3 +30,4 @@ playlist/
  playlist.m3u
 M3UScanner.py 
 requirements.txt
+
