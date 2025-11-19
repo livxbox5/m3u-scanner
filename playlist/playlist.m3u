@@ -12,28 +12,104 @@ https://edge1.1internet.tv/
 https://edge1.1internet.tv/
 #############################
 
-#EXTINF:-1 group-title="Новостные" quality="high" stable="True" , Первый Ярославский
-https://yaroslavl.mediacdn.ru/cdn/pervyaroslavsk/playlist.m3u8
-#EXTINF:-1 group-title="Новостные" quality="high" stable="True" , Первый информационный (1080p)
-https://ngtrk.dc.beltelecom.by/ngtrk/smil:informacionnyy.smil/playlist.m3u8
-#EXTINF:-1 group-title="Новостные" quality="high" stable="True" , Первый Республиканский
-https://streaming.televizor-24-tochka.ru/live/27.m3u8
-#EXTINF:-1 group-title="Новостные" quality="medium" , Первый канал
-https://edge1.1internet.tv/dash-live2/streams/1tv-dvr/1tvdash.mpd
-#EXTINF:-1 group-title="Новостные" quality="high" stable="True" , Первый Республиканский
-https://streaming.televizor-24-tochka.ru/live/27.m3u8
-#EXTINF:-1 group-title="Новостные" quality="high" stable="True" , Первый Ярославский
-https://yaroslavl.mediacdn.ru/cdn/pervyaroslavsk/playlist.m3u8
-#EXTINF:-1 group-title="Новостные" quality="high" stable="True" , Россия К
-https://vgtrkregion-reg.cdnvideo.ru/vgtrk/0/kultura-hd/index.m3u8
-#EXTINF:-1 group-title="Новостные" quality="high" stable="True" , Россия 1
-https://vgtrkregion-reg.cdnvideo.ru/vgtrk/0/russia1-hd/index.m3u8
-#EXTINF:-1 group-title="Развлекательные" quality="high" stable="True" , Русский Бестселлер
-http://31.148.48.15/Russkiy_Bestseller/index.m3u8
-#EXTINF:-1 group-title="Музыкальные" quality="high" stable="True" , Europa Plus TV
-http://31.148.48.15/Europa_Plus_HD/index.m3u8
-#EXTINF:-1 group-title="Музыкальные" quality="high" stable="True" , ТНТ MUSIC
-https://cdn-01.bonus-tv.ru/tntmusic/playlist.m3u8
-#EXTINF:-1 group-title="Музыкальные" quality="high" stable="True" , Музыка Первого
-http://31.148.48.15/Muzika_Pervogo/index.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" , Первый Ярославский
+https://list.iptvcat.com/my_list/.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" , Первый Ярославский
+https://list.iptvcat.com/my_list/.m3u
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" , Первый Ярославский
+https://www.goodiptv.club/yylunbo.m3u
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" , Первый Ярославский
+https://gh-proxy.com/https://raw.githubusercontent.com/fanmingming/live/main/tv/m3u/ipv6.m3u
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" , Первый Ярославский
+https://tmxk.pp.ua/4gtv-cn.m3u
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" , Первый информационный (1080p)
+https://list.iptvcat.com/my_list/.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" , Первый информационный (1080p)
+https://list.iptvcat.com/my_list/.m3u
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" , Первый информационный (1080p)
+https://www.goodiptv.club/yylunbo.m3u
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" , Первый информационный (1080p)
+https://gh-proxy.com/https://raw.githubusercontent.com/fanmingming/live/main/tv/m3u/ipv6.m3u
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" , Первый информационный (1080p)
+https://tmxk.pp.ua/4gtv-cn.m3u
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" , Первый Республиканский
+https://list.iptvcat.com/my_list/.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" , Первый Республиканский
+https://list.iptvcat.com/my_list/.m3u
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" , Первый Республиканский
+https://www.goodiptv.club/yylunbo.m3u
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" , Первый Республиканский
+https://gh-proxy.com/https://raw.githubusercontent.com/fanmingming/live/main/tv/m3u/ipv6.m3u
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" , Первый Республиканский
+https://tmxk.pp.ua/4gtv-cn.m3u
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" , Первый канал
+https://list.iptvcat.com/my_list/.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" , Первый канал
+https://list.iptvcat.com/my_list/.m3u
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" , Первый канал
+https://www.goodiptv.club/yylunbo.m3u
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" , Первый канал
+https://gh-proxy.com/https://raw.githubusercontent.com/fanmingming/live/main/tv/m3u/ipv6.m3u
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" , Первый канал
+https://tmxk.pp.ua/4gtv-cn.m3u
+#EXTINF:-1 group-title="Новостные" quality="medium" stable="True" , Россия К
+https://list.iptvcat.com/my_list/.m3u8
+#EXTINF:-1 group-title="Новостные" quality="medium" stable="True" , Россия К
+https://list.iptvcat.com/my_list/.m3u
+#EXTINF:-1 group-title="Новостные" quality="medium" stable="True" , Россия К
+https://www.goodiptv.club/yylunbo.m3u
+#EXTINF:-1 group-title="Новостные" quality="medium" stable="True" , Россия К
+https://gh-proxy.com/https://raw.githubusercontent.com/fanmingming/live/main/tv/m3u/ipv6.m3u
+#EXTINF:-1 group-title="Новостные" quality="medium" stable="True" , Россия К
+https://tmxk.pp.ua/4gtv-cn.m3u
+#EXTINF:-1 group-title="Новостные" quality="medium" stable="True" , Россия 1
+https://list.iptvcat.com/my_list/.m3u8
+#EXTINF:-1 group-title="Новостные" quality="medium" stable="True" , Россия 1
+https://list.iptvcat.com/my_list/.m3u
+#EXTINF:-1 group-title="Новостные" quality="medium" stable="True" , Россия 1
+https://www.goodiptv.club/yylunbo.m3u
+#EXTINF:-1 group-title="Новостные" quality="medium" stable="True" , Россия 1
+https://gh-proxy.com/https://raw.githubusercontent.com/fanmingming/live/main/tv/m3u/ipv6.m3u
+#EXTINF:-1 group-title="Новостные" quality="medium" stable="True" , Россия 1
+https://tmxk.pp.ua/4gtv-cn.m3u
+#EXTINF:-1 group-title="Развлекательные" quality="medium" stable="True" , Русский Бестселлер
+https://list.iptvcat.com/my_list/.m3u8
+#EXTINF:-1 group-title="Развлекательные" quality="medium" stable="True" , Русский Бестселлер
+https://list.iptvcat.com/my_list/.m3u
+#EXTINF:-1 group-title="Развлекательные" quality="medium" stable="True" , Русский Бестселлер
+https://gh-proxy.com/https://raw.githubusercontent.com/fanmingming/live/main/tv/m3u/ipv6.m3u
+#EXTINF:-1 group-title="Развлекательные" quality="medium" stable="True" , Русский Бестселлер
+https://tmxk.pp.ua/4gtv-cn.m3u
+#EXTINF:-1 group-title="Развлекательные" quality="medium" stable="True" , Русский Бестселлер
+http://bxtv.3a.ink/live.m3u
+#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" , Europa Plus TV
+https://list.iptvcat.com/my_list/.m3u8
+#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" , Europa Plus TV
+https://list.iptvcat.com/my_list/.m3u
+#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" , Europa Plus TV
+https://live.freetv.top/huyayqk.m3u
+#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" , Europa Plus TV
+https://www.goodiptv.club/yylunbo.m3u
+#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" , Europa Plus TV
+https://gh-proxy.com/https://raw.githubusercontent.com/fanmingming/live/main/tv/m3u/ipv6.m3u
+#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" , ТНТ MUSIC
+https://list.iptvcat.com/my_list/.m3u8
+#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" , ТНТ MUSIC
+https://list.iptvcat.com/my_list/.m3u
+#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" , ТНТ MUSIC
+https://www.goodiptv.club/yylunbo.m3u
+#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" , ТНТ MUSIC
+https://gh-proxy.com/https://raw.githubusercontent.com/fanmingming/live/main/tv/m3u/ipv6.m3u
+#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" , ТНТ MUSIC
+https://tmxk.pp.ua/4gtv-cn.m3u
+#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" , Музыка Первого
+https://list.iptvcat.com/my_list/.m3u8
+#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" , Музыка Первого
+https://list.iptvcat.com/my_list/.m3u
+#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" , Музыка Первого
+https://www.goodiptv.club/yylunbo.m3u
+#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" , Музыка Первого
+https://gh-proxy.com/https://raw.githubusercontent.com/fanmingming/live/main/tv/m3u/ipv6.m3u
+#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" , Музыка Первого
+https://tmxk.pp.ua/4gtv-cn.m3u
 
