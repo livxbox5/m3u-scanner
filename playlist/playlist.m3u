@@ -1,37 +1,38 @@
 #EXTM3U
-# Обновлен: 2025-11-17 14:44:41
+# Обновлен: 2025-11-19 15:24:41
 # Всего каналов: 13
-# Всего ссылок: 5
+# Всего ссылок: 15
 
 #############################
-#EXTINF:-1 group-title="INFOℹ️" quality="medium" , ТГ канал https://t.me/NexusIPTVGroups
+#EXTINF:-1 group-title="Общие" quality="medium" , Обновление 2025-11-19 15:24:41
 https://edge1.1internet.tv/
-#EXTINF:-1 group-title="INFOℹ️" quality="medium" , ТГ канал https://t.me/NexusIPTVGroups
+#EXTINF:-1 group-title="Общие" quality="medium" , ТГ канал https://t.me/NexusIPTVGroups
 https://edge1.1internet.tv/
-#EXTINF:-1 group-title="INFOℹ️" quality="medium" , GitHUB https://raw.githubusercontent.com/livxbox5/m3u-scanner/refs/heads/main/playlist/playlist.m3u
+#EXTINF:-1 group-title="Общие" quality="medium" , GitHUB https://raw.githubusercontent.com/livxbox5/m3u-scanner/refs/heads/main/playlist/playlist.m3u
 https://edge1.1internet.tv/
 #############################
-#EXTINF:-1 group-title="Новостные" quality="high" stable="True" , Первый Ярославский
+
+#EXTINF:-1 group-title="Общие" quality="high" stable="True" , Первый Ярославский
 https://yaroslavl.mediacdn.ru/cdn/pervyaroslavsk/playlist.m3u8
-#EXTINF:-1 group-title="Новостные" quality="high" stable="True" , Первый информационный (1080p)
+#EXTINF:-1 group-title="Общие" quality="high" stable="True" , Первый информационный (1080p)
 https://ngtrk.dc.beltelecom.by/ngtrk/smil:informacionnyy.smil/playlist.m3u8
-#EXTINF:-1 group-title="Новостные" quality="high" stable="True" , Первый Республиканский
+#EXTINF:-1 group-title="Общие" quality="high" stable="True" , Первый Республиканский
 https://streaming.televizor-24-tochka.ru/live/27.m3u8
-#EXTINF:-1 group-title="Новостные" quality="medium" , Первый канал
+#EXTINF:-1 group-title="Общие" quality="medium" , Первый канал
 https://edge1.1internet.tv/dash-live2/streams/1tv-dvr/1tvdash.mpd
-#EXTINF:-1 group-title="Новостные" quality="high" stable="True" , Первый Республиканский
+#EXTINF:-1 group-title="Общие" quality="high" stable="True" , Первый Республиканский
 https://streaming.televizor-24-tochka.ru/live/27.m3u8
-#EXTINF:-1 group-title="Новостные" quality="high" stable="True" , Первый Ярославский
+#EXTINF:-1 group-title="Общие" quality="high" stable="True" , Первый Ярославский
 https://yaroslavl.mediacdn.ru/cdn/pervyaroslavsk/playlist.m3u8
-#EXTINF:-1 group-title="Новостные" quality="high" stable="True" , Россия К
+#EXTINF:-1 group-title="Общие" quality="high" stable="True" , Россия К
 https://vgtrkregion-reg.cdnvideo.ru/vgtrk/0/kultura-hd/index.m3u8
-#EXTINF:-1 group-title="Новостные" quality="high" stable="True" , Россия 1
+#EXTINF:-1 group-title="Общие" quality="high" stable="True" , Россия 1
 https://vgtrkregion-reg.cdnvideo.ru/vgtrk/0/russia1-hd/index.m3u8
-#EXTINF:-1 group-title="Развлекательные" quality="high" stable="True" , Русский Бестселлер
+#EXTINF:-1 group-title="Общие" quality="high" stable="True" , Русский Бестселлер
 http://31.148.48.15/Russkiy_Bestseller/index.m3u8
-#EXTINF:-1 group-title="Музыкальные" quality="high" stable="True" , Europa Plus TV
+#EXTINF:-1 group-title="Общие" quality="high" stable="True" , Europa Plus TV
 http://31.148.48.15/Europa_Plus_HD/index.m3u8
-#EXTINF:-1 group-title="Музыкальные" quality="high" stable="True" , ТНТ MUSIC
+#EXTINF:-1 group-title="Общие" quality="high" stable="True" , ТНТ MUSIC
 https://cdn-01.bonus-tv.ru/tntmusic/playlist.m3u8
-#EXTINF:-1 group-title="Музыкальные" quality="high" stable="True" , Музыка Первого
+#EXTINF:-1 group-title="Общие" quality="high" stable="True" , Музыка Первого
 http://31.148.48.15/Muzika_Pervogo/index.m3u8
