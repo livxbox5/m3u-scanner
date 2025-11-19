@@ -1,10 +1,10 @@
 #EXTM3U
-# Обновлен: 2025-11-19 15:24:41
+# Обновлен: 2025-11-19 18:14:41
 # Всего каналов: 13
 # Всего ссылок: 15
 
 #############################
-#EXTINF:-1 group-title="Общие" quality="medium" , Обновление 2025-11-19 15:24:41
+#EXTINF:-1 group-title="Общие" quality="medium" , Обновление 2025-11-19 18:14:41
 https://edge1.1internet.tv/
 #EXTINF:-1 group-title="Общие" quality="medium" , ТГ канал https://t.me/NexusIPTVGroups
 https://edge1.1internet.tv/
@@ -112,4 +112,5 @@ https://www.goodiptv.club/yylunbo.m3u
 https://gh-proxy.com/https://raw.githubusercontent.com/fanmingming/live/main/tv/m3u/ipv6.m3u
 #EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" , Музыка Первого
 https://tmxk.pp.ua/4gtv-cn.m3u
+
 
