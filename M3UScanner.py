@@ -17,13 +17,14 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 class OnlineM3UScanner:
     def __init__(self):
-        self.timeout = 10
+        self.timeout = 15  # Увеличил таймаут
         self.playlist_file = "playlist/playlist.m3u"
         self.sites_file = "files/site.txt"
         self.cartolog_file = "files/cartolog.txt"
-        self.channels_file = "files/Channels.txt"  # Файл со списком каналов для поиска
-        self.max_workers = 5
-        self.max_sites_per_search = 15
+        self.channels_file = "files/Channels.txt"
+        self.max_workers = 3  # Уменьшил для стабильности
+        self.max_sites_per_search = 10
+        self.max_retries = 5  # Увеличил количество попыток
 
         # Улучшенные источники для поиска
         self.search_sources = [
@@ -46,6 +47,14 @@ class OnlineM3UScanner:
 
         # Кэш для хранения найденных каналов
         self.channels_cache = {}
+
+        # Статистика для отладки
+        self.stats = {
+            'total_requests': 0,
+            'successful_requests': 0,
+            'failed_requests': 0,
+            'avg_response_time': 0
+        }
 
     def load_custom_sites(self):
         """Загружает список сайтов из файла site.txt"""
@@ -200,27 +209,60 @@ class OnlineM3UScanner:
 
         return "Общие"
 
-    def make_request(self, url, method='GET', max_retries=3):
-        """Выполняет HTTP запрос с повторными попытками"""
+    def make_request(self, url, method='GET', max_retries=None):
+        """Улучшенный HTTP запрос с повторными попытками и прогрессивными таймаутами"""
+        if max_retries is None:
+            max_retries = self.max_retries
+
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': '*/*',
             'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
+            'Connection': 'keep-alive',
         }
 
         for attempt in range(max_retries):
+            self.stats['total_requests'] += 1
+            start_time = time.time()
+
             try:
                 if method.upper() == 'HEAD':
                     req = urllib.request.Request(url, headers=headers, method='HEAD')
                 else:
                     req = urllib.request.Request(url, headers=headers)
 
-                response = urllib.request.urlopen(req, timeout=self.timeout)
+                # Прогрессивный таймаут
+                current_timeout = min(self.timeout * (attempt + 1), 30)
+                response = urllib.request.urlopen(req, timeout=current_timeout)
+                response_time = time.time() - start_time
+
+                self.stats['successful_requests'] += 1
+                self.stats['avg_response_time'] = (
+                    self.stats['avg_response_time'] * (self.stats['successful_requests'] - 1) + response_time
+                ) / self.stats['successful_requests']
+
                 return response
+
+            except urllib.error.HTTPError as e:
+                if e.code in [403, 404, 429]:
+                    print(f"   ⚠️ HTTP {e.code} для {url}, пропускаем")
+                    return None
+                elif attempt == max_retries - 1:
+                    print(f"   ❌ Ошибка HTTP после {max_retries} попыток: {e}")
+                    self.stats['failed_requests'] += 1
+                    return None
+
             except Exception as e:
                 if attempt == max_retries - 1:
+                    print(f"   ❌ Ошибка после {max_retries} попыток: {e}")
+                    self.stats['failed_requests'] += 1
                     return None
-                time.sleep(1)
+
+                # Прогрессивная задержка между попытками
+                delay = min(2 ** attempt, 10)  # Экспоненциальная backoff, максимум 10 секунд
+                print(f"   ⏳ Попытка {attempt + 1}/{max_retries} не удалась, ждем {delay} сек...")
+                time.sleep(delay)
+
         return None
 
     def search_custom_sites(self, channel_name):
@@ -241,12 +283,13 @@ class OnlineM3UScanner:
                     m3u_urls = self.scan_site_for_m3u(site, channel_name)
                     found_urls.update(m3u_urls)
 
-                time.sleep(0.5)
+                time.sleep(1)  # Увеличил задержку для стабильности
 
             except Exception as e:
+                print(f"   ⚠️ Ошибка при поиске на {site}: {e}")
                 continue
 
-        return list(found_urls)[:50]
+        return list(found_urls)[:30]  # Уменьшил лимит для стабильности
 
     def search_on_engine(self, engine_url, channel_name):
         """Ищет на поисковых системах и видео платформах"""
@@ -259,7 +302,7 @@ class OnlineM3UScanner:
                 if response:
                     content = response.read().decode('utf-8', errors='ignore')
                     m3u_urls = re.findall(r'https?://[^\s"<>]+\.m3u8?', content)
-                    found_urls.update(m3u_urls)
+                    found_urls.update(m3u_urls[:5])  # Ограничиваем количество
 
             elif 'google.com' in engine_url:
                 search_url = f"https://www.google.com/search?q={quote(channel_name + ' m3u8 iptv live')}"
@@ -267,7 +310,7 @@ class OnlineM3UScanner:
                 if response:
                     content = response.read().decode('utf-8', errors='ignore')
                     m3u_urls = re.findall(r'https?://[^\s"<>]+\.m3u8?', content)
-                    found_urls.update(m3u_urls)
+                    found_urls.update(m3u_urls[:5])
 
             elif 'youtube.com' in engine_url:
                 search_url = f"https://www.youtube.com/results?search_query={quote(channel_name + ' live stream')}"
@@ -275,12 +318,12 @@ class OnlineM3UScanner:
                 if response:
                     content = response.read().decode('utf-8', errors='ignore')
                     video_ids = re.findall(r'"videoId":"([a-zA-Z0-9_-]{11})"', content)
-                    for video_id in video_ids[:3]:
+                    for video_id in video_ids[:2]:  # Ограничиваем количество
                         youtube_url = f"https://www.youtube.com/watch?v={video_id}"
                         found_urls.add(youtube_url)
 
         except Exception as e:
-            pass
+            print(f"   ⚠️ Ошибка поиска на {engine_url}: {e}")
 
         return list(found_urls)
 
@@ -295,15 +338,15 @@ class OnlineM3UScanner:
 
                 # Ищем прямые M3U8 ссылки
                 m3u8_urls = re.findall(r'https?://[^\s"\'<>]+\.m3u8', content)
-                found_urls.update(m3u8_urls)
+                found_urls.update(m3u8_urls[:10])  # Ограничиваем количество
 
                 # Ищем прямые M3U ссылки
                 m3u_urls = re.findall(r'https?://[^\s"\'<>]+\.m3u', content)
-                found_urls.update(m3u_urls)
+                found_urls.update(m3u_urls[:10])
 
                 # Ищем ссылки на плейлисты в href
                 playlist_urls = re.findall(r'href="([^"]+\.m3u8?)"', content, re.IGNORECASE)
-                for url in playlist_urls:
+                for url in playlist_urls[:10]:  # Ограничиваем количество
                     if url.startswith('/'):
                         full_url = urljoin(site_url, url)
                         found_urls.add(full_url)
@@ -311,19 +354,20 @@ class OnlineM3UScanner:
                         found_urls.add(url)
 
         except Exception as e:
-            pass
+            print(f"   ⚠️ Ошибка сканирования {site_url}: {e}")
 
         return list(found_urls)
 
     def download_playlist(self, url):
-        """Скачивает плейлист с источника"""
+        """Скачивает плейлист с источника с улучшенной обработкой ошибок"""
         try:
-            response = self.make_request(url, 'GET')
+            response = self.make_request(url, 'GET', max_retries=2)
             if response and response.getcode() == 200:
                 content = response.read().decode('utf-8', errors='ignore')
                 return content
             return None
         except Exception as e:
+            print(f"   ⚠️ Ошибка загрузки плейлиста {url}: {e}")
             return None
 
     def search_iptv_sources(self, channel_name):
@@ -339,16 +383,21 @@ class OnlineM3UScanner:
         streams = []
         for source in iptv_sources:
             try:
+                print(f"      📥 Загружаем: {source.split('/')[-1]}")
                 content = self.download_playlist(source)
                 if content:
                     found = self.extract_channels_from_playlist(content, channel_name)
                     streams.extend(found)
-            except:
+                    print(f"      ✅ Найдено {len(found)} потоков")
+                else:
+                    print(f"      ❌ Источник недоступен")
+            except Exception as e:
+                print(f"      ⚠️ Ошибка в источнике {source}: {e}")
                 continue
         return streams
 
     def search_in_online_sources(self, channel_name):
-        """Улучшенный поиск канала в интернете"""
+        """Улучшенный поиск канала в интернете с лучшей стабильностью"""
         print(f"🌐 Запуск расширенного поиска для канала: '{channel_name}'")
         all_streams = []
 
@@ -356,7 +405,7 @@ class OnlineM3UScanner:
         print("   📡 Этап 1/3: Проверка базовых источников...")
         for i, source_url in enumerate(self.search_sources, 1):
             try:
-                print(f"      🔍 Проверяем источник {i}/{len(self.search_sources)}: {source_url}")
+                print(f"      🔍 Проверяем источник {i}/{len(self.search_sources)}: {source_url.split('/')[-1]}")
                 playlist_content = self.download_playlist(source_url)
                 if playlist_content:
                     found_streams = self.extract_channels_from_playlist(playlist_content, channel_name)
@@ -364,8 +413,9 @@ class OnlineM3UScanner:
                     print(f"      ✅ Найдено {len(found_streams)} потоков")
                 else:
                     print(f"      ❌ Источник недоступен")
+                time.sleep(1)  # Задержка между источниками
             except Exception as e:
-                print(f"      💥 Ошибка: {e}")
+                print(f"      ⚠️ Ошибка: {e}")
                 continue
 
         # 2. Поиск в специализированных IPTV источниках
@@ -386,7 +436,7 @@ class OnlineM3UScanner:
         return all_streams
 
     def quick_check_urls(self, urls, channel_name):
-        """Улучшенная быстрая проверка URL"""
+        """Улучшенная быстрая проверка URL с ограничением"""
         valid_streams = []
 
         def check_url(url):
@@ -397,25 +447,33 @@ class OnlineM3UScanner:
                         'name': f"{channel_name}",
                         'url': url,
                         'source': 'youtube',
-                        'group': 'YouTube'
+                        'group': 'YouTube',
+                        'stability_score': 8  # YouTube обычно стабилен
                     }
 
                 # Для M3U8 ссылок
                 elif '.m3u8' in url.lower():
-                    response = self.make_request(url, 'HEAD')
+                    response = self.make_request(url, 'HEAD', max_retries=2)
                     if response and response.getcode() == 200:
                         content_type = response.headers.get('Content-Type', '')
+                        content_length = response.headers.get('Content-Length')
+
+                        stability_score = 5  # Базовый балл
+                        if content_length and int(content_length) > 5000:
+                            stability_score += 3  # Большой размер - вероятно стабильный
+
                         if any(ct in content_type.lower() for ct in ['video', 'application', 'octet-stream', 'mpegurl']):
                             return {
                                 'name': f"{channel_name}",
                                 'url': url,
                                 'source': 'm3u8',
-                                'group': 'M3U8'
+                                'group': 'M3U8',
+                                'stability_score': stability_score
                             }
 
                 # Для M3U ссылок
                 elif '.m3u' in url.lower():
-                    response = self.make_request(url, 'GET')
+                    response = self.make_request(url, 'GET', max_retries=2)
                     if response and response.getcode() == 200:
                         content = response.read(1024).decode('utf-8', errors='ignore')
                         if '#EXTM3U' in content:
@@ -423,16 +481,20 @@ class OnlineM3UScanner:
                                 'name': f"{channel_name}",
                                 'url': url,
                                 'source': 'm3u',
-                                'group': 'M3U'
+                                'group': 'M3U',
+                                'stability_score': 6
                             }
 
                 return None
-            except:
+            except Exception as e:
                 return None
 
-        # Проверяем URL параллельно
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            futures = [executor.submit(check_url, url) for url in urls[:50]]
+        # Ограничиваем количество проверяемых URL для стабильности
+        urls_to_check = urls[:20]
+
+        # Проверяем URL параллельно с ограничением
+        with ThreadPoolExecutor(max_workers=2) as executor:  # Уменьшил workers для стабильности
+            futures = [executor.submit(check_url, url) for url in urls_to_check]
 
             for future in as_completed(futures):
                 result = future.result()
@@ -464,6 +526,7 @@ class OnlineM3UScanner:
                         if url and not url.startswith('#') and url.startswith('http'):
                             # Проверяем качество канала перед добавлением
                             if self.is_high_quality_channel(channel_info):
+                                stability_score = self.calculate_stability_score(channel_info, url)
                                 streams.append({
                                     'name': channel_info.get('name', channel_name),
                                     'url': url,
@@ -471,14 +534,55 @@ class OnlineM3UScanner:
                                     'group': channel_info.get('group-title', 'Общие'),
                                     'tvg_id': channel_info.get('tvg-id', ''),
                                     'tvg_logo': channel_info.get('tvg-logo', ''),
-                                    'quality_score': self.calculate_quality_score(channel_info)
+                                    'quality_score': self.calculate_quality_score(channel_info),
+                                    'stability_score': stability_score
                                 })
                                 i += 1
             i += 1
 
-        # Сортируем по качеству (лучшие первыми)
-        streams.sort(key=lambda x: x.get('quality_score', 0), reverse=True)
-        return streams
+        # Сортируем по стабильности и качеству (самые стабильные первыми)
+        streams.sort(key=lambda x: (x.get('stability_score', 0), x.get('quality_score', 0)), reverse=True)
+        return streams[:10]  # Ограничиваем количество
+
+    def calculate_stability_score(self, channel_info, url):
+        """Рассчитывает оценку стабильности канала"""
+        score = 5  # Базовый балл
+
+        name = channel_info.get('name', '').lower()
+        url_lower = url.lower()
+
+        # Признаки стабильных источников
+        stable_indicators = {
+            'github.com': 3,
+            'raw.githubusercontent.com': 3,
+            'iptv-org.github.io': 3,
+            'youtube.com': 2,
+            'youtu.be': 2,
+            'ok.ru': 1,
+            'vk.com': 1,
+        }
+
+        # Признаки нестабильных источников
+        unstable_indicators = {
+            'test': -3,
+            'тест': -3,
+            'temp': -2,
+            'временн': -2,
+            'localhost': -5,
+            '127.0.0.1': -5,
+        }
+
+        # Проверяем URL на стабильность
+        for domain, points in stable_indicators.items():
+            if domain in url_lower:
+                score += points
+
+        # Проверяем название на нестабильность
+        for indicator, penalty in unstable_indicators.items():
+            if indicator in name:
+                score += penalty
+
+        return max(1, min(10, score))  # Ограничиваем диапазон 1-10
 
     def exact_match(self, channel_title, search_patterns):
         """Точное совпадение с учетом границ слов"""
@@ -637,7 +741,7 @@ class OnlineM3UScanner:
         return info
 
     def check_stream_with_ffmpeg(self, url):
-        """Проверяет поток с помощью ffmpeg"""
+        """Проверяет поток с помощью ffmpeg с улучшенной обработкой"""
         try:
             result = subprocess.run(['ffmpeg', '-version'], capture_output=True, timeout=5)
             if result.returncode != 0:
@@ -646,21 +750,25 @@ class OnlineM3UScanner:
             cmd = [
                 'ffmpeg',
                 '-i', url,
-                '-t', '5',
+                '-t', '8',  # Увеличил время проверки
                 '-f', 'null',
                 '-',
                 '-hide_banner',
-                '-loglevel', 'error'
+                '-loglevel', 'error',
+                '-timeout', '15000000'  # Таймаут для ffmpeg
             ]
 
-            result = subprocess.run(cmd, capture_output=True, timeout=10)
+            result = subprocess.run(cmd, capture_output=True, timeout=15)  # Увеличил общий таймаут
             return result.returncode == 0
 
-        except:
+        except subprocess.TimeoutExpired:
+            print(f"   ⏱️ FFmpeg таймаут для {url[:50]}...")
+            return None
+        except Exception as e:
             return None
 
     def check_single_stream(self, stream_info):
-        """Проверяет работоспособность ссылки с улучшенной проверкой"""
+        """Улучшенная проверка работоспособности ссылки"""
         try:
             url = stream_info['url']
 
@@ -671,46 +779,53 @@ class OnlineM3UScanner:
 
             # Для YouTube ссылок - считаем рабочими
             if 'youtube.com/watch' in url or 'youtu.be' in url:
-                return {**stream_info, 'working': True, 'status': 'YouTube', 'quality': 'high'}
+                return {**stream_info, 'working': True, 'status': 'YouTube', 'quality': 'high', 'stable': True}
 
-            # Пробуем проверку через ffmpeg
-            ffmpeg_result = self.check_stream_with_ffmpeg(url)
-            if ffmpeg_result:
-                return {**stream_info, 'working': True, 'status': 'FFmpeg проверен', 'quality': 'high'}
+            # Пробуем проверку через ffmpeg (только для стабильных источников)
+            if stream_info.get('stability_score', 0) >= 6:
+                ffmpeg_result = self.check_stream_with_ffmpeg(url)
+                if ffmpeg_result:
+                    return {**stream_info, 'working': True, 'status': 'FFmpeg проверен', 'quality': 'high', 'stable': True}
 
             # Для M3U8 ссылок - улучшенная проверка
             if url.endswith('.m3u8') or 'm3u8' in url:
                 response = self.make_request(url, 'HEAD')
                 if response and response.getcode() == 200:
                     content_length = response.headers.get('Content-Length')
-                    # Если контент слишком маленький - вероятно, это не рабочий поток
-                    if content_length and int(content_length) > 1000:
-                        return {**stream_info, 'working': True, 'status': 'M3U8 доступен', 'quality': 'medium'}
-                    else:
-                        return {**stream_info, 'working': True, 'status': 'M3U8 (малый размер)', 'quality': 'low'}
+                    content_type = response.headers.get('Content-Type', '').lower()
+
+                    is_stable = False
+                    if content_length and int(content_length) > 5000:
+                        is_stable = True
+                    elif 'mpegurl' in content_type or 'video' in content_type:
+                        is_stable = True
+
+                    return {**stream_info, 'working': True, 'status': 'M3U8 доступен',
+                            'quality': 'high' if is_stable else 'medium',
+                            'stable': is_stable}
 
             # Для M3U ссылок
             elif url.endswith('.m3u') or 'm3u' in url:
                 response = self.make_request(url, 'GET')
                 if response and response.getcode() == 200:
-                    content = response.read(1024).decode('utf-8', errors='ignore')
+                    content = response.read(2048).decode('utf-8', errors='ignore')  # Увеличил буфер
                     if '#EXTM3U' in content:
-                        return {**stream_info, 'working': True, 'status': 'M3U валидный', 'quality': 'medium'}
+                        return {**stream_info, 'working': True, 'status': 'M3U валидный', 'quality': 'medium', 'stable': True}
 
             # Общая проверка с таймаутом
             response = self.make_request(url, 'HEAD')
             if response and response.getcode() == 200:
                 content_type = response.headers.get('Content-Type', '').lower()
                 if any(ct in content_type for ct in ['video/', 'audio/', 'application/']):
-                    return {**stream_info, 'working': True, 'status': 'Поток доступен', 'quality': 'medium'}
+                    return {**stream_info, 'working': True, 'status': 'Поток доступен', 'quality': 'medium', 'stable': False}
 
-            return {**stream_info, 'working': False, 'status': 'Не доступен', 'quality': 'none'}
+            return {**stream_info, 'working': False, 'status': 'Не доступен', 'quality': 'none', 'stable': False}
 
         except Exception as e:
-            return {**stream_info, 'working': False, 'status': f'Ошибка: {str(e)}', 'quality': 'none'}
+            return {**stream_info, 'working': False, 'status': f'Ошибка: {str(e)}', 'quality': 'none', 'stable': False}
 
     def check_streams(self, streams):
-        """Проверяет все найденные ссылки с приоритетом качества"""
+        """Проверяет все найденные ссылки с приоритетом стабильности"""
         working_streams = []
         total = len(streams)
 
@@ -719,11 +834,11 @@ class OnlineM3UScanner:
 
         print(f"🔧 Проверка {total} найденных ссылок...")
 
-        # Сортируем потоки по оценке качества перед проверкой
-        sorted_streams = sorted(streams, key=lambda x: x.get('quality_score', 0), reverse=True)
+        # Сортируем потоки по стабильности перед проверкой
+        sorted_streams = sorted(streams, key=lambda x: x.get('stability_score', 0), reverse=True)
 
-        # Используем многопоточность для проверка
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        # Используем многопоточность с ограничением
+        with ThreadPoolExecutor(max_workers=2) as executor:  # Уменьшил для стабильности
             future_to_stream = {executor.submit(self.check_single_stream, stream): stream for stream in sorted_streams}
 
             for i, future in enumerate(as_completed(future_to_stream), 1):
@@ -731,19 +846,25 @@ class OnlineM3UScanner:
                 if result:
                     if result['working']:
                         working_streams.append(result)
+                        stability_icon = '🔴' if not result.get('stable') else '🟢'
                         quality_icon = '🔴' if result.get('quality') == 'low' else '🟡' if result.get('quality') == 'medium' else '🟢'
-                        print(f"  [{i}/{total}] ✅ {quality_icon} РАБОТАЕТ - {result['status']}")
+                        print(f"  [{i}/{total}] ✅ {quality_icon}{stability_icon} РАБОТАЕТ - {result['status']}")
                     else:
                         print(f"  [{i}/{total}] ❌ Не работает - {result['status']}")
 
-        # Сортируем рабочие потоки по качеству
-        working_streams.sort(key=lambda x: {'high': 3, 'medium': 2, 'low': 1}.get(x.get('quality', 'low'), 1), reverse=True)
+        # Сортируем рабочие потоки по стабильности и качеству
+        working_streams.sort(key=lambda x: (
+            x.get('stable', False),
+            x.get('stability_score', 0),
+            {'high': 3, 'medium': 2, 'low': 1}.get(x.get('quality', 'low'), 1)
+        ), reverse=True)
+
         return working_streams
 
     def search_and_update_channel(self, channel_name):
-        """Поиск и обновление канала в плейлисте с умным объединением"""
-        print(f"\n🚀 Запуск ТОЧНОГО поиска: '{channel_name}'")
-        print("⏳ Это может занять 1-2 минуты...")
+        """Поиск и обновление канала в плейлисте с улучшенной стабильностью"""
+        print(f"\n🚀 Запуск СТАБИЛЬНОГО поиска: '{channel_name}'")
+        print("⏳ Это может занять 2-3 минуты...")
 
         # Загружаем существующие каналы ДО поиска (только динамическую часть)
         existing_channels = self.load_existing_channels()
@@ -808,17 +929,20 @@ class OnlineM3UScanner:
             # ОБЪЕДИНЯЕМ старые и новые ссылки (убираем дубликаты URL)
             combined_streams = self.merge_streams(old_streams, working_streams)
 
-            # Фильтруем только качественные потоки (максимум 5 лучших)
-            high_quality_streams = [s for s in combined_streams if s.get('quality') in ['high', 'medium']]
-            if len(high_quality_streams) > 5:
-                combined_streams = high_quality_streams[:5]
+            # Фильтруем только стабильные и качественные потоки
+            stable_streams = [s for s in combined_streams if s.get('stable', False)]
+            if stable_streams:
+                combined_streams = stable_streams[:3]  # Берем только 3 самых стабильных
+            else:
+                combined_streams = combined_streams[:3]  # Или 3 лучших по качеству
 
             print("\n🎉" + "=" * 50)
             print(f"✅ НАЙДЕНО РАБОЧИХ ССЫЛОК: {len(working_streams)}")
-            print(f"🎯 КАЧЕСТВЕННЫХ ПОТОКОВ: {len([s for s in combined_streams if s.get('quality') in ['high', 'medium']])}")
-            if old_streams:
-                print(f"💾 СТАРЫХ ССЫЛОК: {len(old_streams)}")
-                print(f"🔗 ВСЕГО ПОСЛЕ ОБЪЕДИНЕНИЯ: {len(combined_streams)}")
+            print(f"🎯 СТАБИЛЬНЫХ ПОТОКОВ: {len(stable_streams)}")
+            print(f"📊 ОБЩАЯ СТАТИСТИКА:")
+            print(f"   📈 Успешных запросов: {self.stats['successful_requests']}")
+            print(f"   📉 Неудачных запросов: {self.stats['failed_requests']}")
+            print(f"   ⏱️ Среднее время ответа: {self.stats['avg_response_time']:.2f} сек")
             print(f"📂 Категория: {category}")
             print(f"⏱️  Время поиска: {search_time:.1f} секунд")
             print("=" * 50)
@@ -830,7 +954,7 @@ class OnlineM3UScanner:
                 print(f"\n🔄 КАНАЛ ОБНОВЛЕН: {final_channel_name}")
                 print(f"📂 Категория: {category}")
                 print(f"📺 Всего ссылок: {len(combined_streams)}")
-                print(f"🎯 Качественных: {len([s for s in combined_streams if s.get('quality') in ['high', 'medium']])}")
+                print(f"🎯 Стабильных: {len([s for s in combined_streams if s.get('stable')])}")
             return True
 
         else:
@@ -848,22 +972,23 @@ class OnlineM3UScanner:
         merged = []
         seen_urls = set()
 
-        # Сначала добавляем новые качественные ссылки (приоритет)
+        # Сначала добавляем новые стабильные ссылки (приоритет)
         for stream in new_streams:
             if stream['url'] not in seen_urls and stream.get('working', True):
                 merged.append(stream)
                 seen_urls.add(stream['url'])
 
-        # Затем добавляем старые качественные ссылки, которых нет в новых
+        # Затем добавляем старые стабильные ссылки, которых нет в новых
         for stream in old_streams:
             if (stream['url'] not in seen_urls and
                 stream.get('working', True) and
-                stream.get('quality') in ['high', 'medium']):
+                stream.get('stable', False)):
                 merged.append(stream)
                 seen_urls.add(stream['url'])
 
         return merged
 
+    # Остальные методы остаются без изменений...
     def update_channel_in_playlist(self, channel_name, new_streams):
         """Обновляет канал в динамической части плейлиста"""
         # Загружаем существующие каналы (только динамическую часть)
@@ -969,6 +1094,10 @@ class OnlineM3UScanner:
                         if quality:
                             extinf_parts.append(f'quality="{quality}"')
 
+                        stable = stream.get('stable', '')
+                        if stable:
+                            extinf_parts.append(f'stable="{stable}"')
+
                         extinf_parts.append(f', {stream["name"]}')
                         f.write(' '.join(extinf_parts) + '\n')
                         f.write(f'{stream["url"]}\n')
@@ -1038,7 +1167,7 @@ https://edge1.1internet.tv/
                     failed_count += 1
                     print(f"❌ УДАЛЕН: {channel_name} (нет рабочих ссылок)")
 
-                time.sleep(1)
+                time.sleep(2)  # Увеличил задержку между каналами
 
             except Exception as e:
                 print(f"💥 ОШИБКА при обновлении {channel_name}: {e}")
@@ -1054,7 +1183,7 @@ https://edge1.1internet.tv/
 
     def search_channel_online(self, channel_name):
         """Основной поиск канала в интернете"""
-        print(f"🎯 ТОЧНЫЙ поиск канала: '{channel_name}'")
+        print(f"🎯 СТАБИЛЬНЫЙ поиск канала: '{channel_name}'")
 
         all_streams = self.search_in_online_sources(channel_name)
 
@@ -1079,7 +1208,7 @@ https://edge1.1internet.tv/
             print("❌ Список каналов пуст. Добавьте каналы в файл Channels.txt")
             return
 
-        print(f"🎯 ЗАПУСК ПОИСКА ПО СПИСКУ ИЗ {len(self.channels_list)} КАНАЛОВ...")
+        print(f"🎯 ЗАПУСК СТАБИЛЬНОГО ПОИСКА ПО СПИСКУ ИЗ {len(self.channels_list)} КАНАЛОВ...")
         print("⏳ Это может занять продолжительное время...")
 
         success_count = 0
@@ -1098,21 +1227,20 @@ https://edge1.1internet.tv/
                     failed_count += 1
                     print(f"❌ НЕ УДАЛОСЬ: {channel_name}")
 
-                # Пауза между запросами
+                # Увеличил паузу между запросами для стабильности
                 if i < len(self.channels_list):
-                    print(f"⏳ Ожидание 3 секунды перед следующим каналом...")
-                    time.sleep(3)
+                    print(f"⏳ Ожидание 5 секунд перед следующим каналом...")
+                    time.sleep(5)
 
             except Exception as e:
                 print(f"💥 ОШИБКА при поиске {channel_name}: {e}")
                 failed_count += 1
                 continue
 
-        print(f"\n🎉 ПОИСК ПО СПИСКУ ЗАВЕРШЕН!")
+        print(f"\n🎉 СТАБИЛЬНЫЙ ПОИСК ПО СПИСКУ ЗАВЕРШЕН!")
         print(f"✅ Успешно найдено: {success_count} каналов")
         print(f"❌ Не найдено: {failed_count} каналов")
         print(f"📊 Все каналы добавлены в динамическую часть плейлиста")
-
 def interactive_mode():
     """Интерактивный режим работы"""
     scanner = OnlineM3UScanner()
