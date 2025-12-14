@@ -5,6 +5,7 @@ import time
 import sys
 import os
 import ssl
+import json
 from urllib.parse import urlparse, urljoin, quote
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -21,8 +22,28 @@ class OnlineM3UScanner:
         self.cartolog_file = "files/cartolog.txt"
         self.channels_file = "files/Channels.txt"
         self.max_workers = 3
-        self.max_sites_per_search = 20  # Увеличил для большего охвата
+        self.max_sites_per_search = 20
         self.max_retries = 3
+
+        # Настройки расширенной проверки качества
+        self.enable_deep_check = True  # Включить глубокую проверку
+        self.check_duration = 5  # Проверять 5 секунд потока
+        self.required_bitrate = 500  # Минимальный битрейт (kbps)
+        self.min_video_resolution = 480  # Минимальное разрешение (pixels)
+        self.required_fps = 25  # Минимальный FPS
+        self.check_timeout = 30  # Таймаут проверки
+
+        # Настройки анализа качества
+        self.quality_weights = {
+            'resolution': 0.4,
+            'bitrate': 0.3,
+            'codec': 0.15,
+            'fps': 0.15
+        }
+
+        # Кэш результатов проверки
+        self.quality_cache = {}
+        self.ffmpeg_path = None
 
         # Автоматически добавляем ffmpeg в PATH
         self.setup_ffmpeg_path()
@@ -40,7 +61,9 @@ class OnlineM3UScanner:
             'total_requests': 0,
             'successful_requests': 0,
             'failed_requests': 0,
-            'avg_response_time': 0
+            'avg_response_time': 0,
+            'quality_checks': 0,
+            'failed_quality_checks': 0
         }
 
     def setup_ffmpeg_path(self):
@@ -53,6 +76,7 @@ class OnlineM3UScanner:
         for path in ffmpeg_paths:
             if os.path.exists(path):
                 os.environ['PATH'] = path + os.pathsep + os.environ['PATH']
+                self.ffmpeg_path = self.find_ffmpeg()
                 print(f"✅ FFmpeg добавлен в PATH: {path}")
                 return
         print("ℹ️  FFmpeg не найден в папке проекта")
@@ -201,8 +225,8 @@ class OnlineM3UScanner:
 
                 self.stats['successful_requests'] += 1
                 self.stats['avg_response_time'] = (
-                    self.stats['avg_response_time'] * (self.stats['successful_requests'] - 1) + response_time
-                ) / self.stats['successful_requests']
+                                                          self.stats['avg_response_time'] * (self.stats['successful_requests'] - 1) + response_time
+                                                  ) / self.stats['successful_requests']
 
                 return response
 
@@ -213,6 +237,260 @@ class OnlineM3UScanner:
                 time.sleep(1)
 
         return None
+
+    def analyze_stream_quality(self, url):
+        """Анализ качества видео потока с помощью FFmpeg"""
+        self.stats['quality_checks'] += 1
+
+        if not self.ffmpeg_path:
+            print("    ℹ️  FFmpeg не найден - пропускаем анализ качества")
+            return None
+
+        if url in self.quality_cache:
+            return self.quality_cache[url]
+
+        print(f"    📊 Анализ качества видео...")
+
+        try:
+            # Команда для получения информации о потоке
+            cmd = [
+                self.ffmpeg_path,
+                '-i', url,
+                '-t', str(self.check_duration),  # Проверяем N секунд
+                '-f', 'null', '-',
+                '-hide_banner',
+                '-loglevel', 'info'
+            ]
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                timeout=self.check_timeout,
+                text=True,
+                errors='ignore'
+            )
+
+            output = result.stderr + result.stdout
+
+            # Парсим информацию о качестве
+            quality_info = self.parse_ffmpeg_output(output)
+
+            # Проверяем минимальные требования
+            if quality_info:
+                meets_requirements = self.check_quality_requirements(quality_info)
+                quality_info['meets_requirements'] = meets_requirements
+                quality_info['quality_score'] = self.calculate_quality_score(quality_info)
+
+                # Кэшируем результат
+                self.quality_cache[url] = quality_info
+
+                # Выводим информацию
+                self.print_quality_info(quality_info)
+
+                return quality_info
+            else:
+                print("    ❌ Не удалось проанализировать качество")
+                return None
+
+        except subprocess.TimeoutExpired:
+            print(f"    ⏰ Таймаут анализа качества")
+            self.stats['failed_quality_checks'] += 1
+            return None
+        except Exception as e:
+            print(f"    ❌ Ошибка анализа: {str(e)[:50]}")
+            self.stats['failed_quality_checks'] += 1
+            return None
+
+    def parse_ffmpeg_output(self, output):
+        """Парсит вывод FFmpeg для получения информации о качестве"""
+        quality_info = {
+            'resolution': None,
+            'bitrate': None,
+            'video_codec': None,
+            'audio_codec': None,
+            'fps': None,
+            'duration': None,
+            'streams': []
+        }
+
+        # Ищем информацию о видео потоке
+        video_patterns = [
+            r'Stream.*Video:.*(\d+)x(\d+)',
+            r'Video:.*(\d+)x(\d+)',
+            r'(\d+)x(\d+).*Video:'
+        ]
+
+        for pattern in video_patterns:
+            match = re.search(pattern, output, re.IGNORECASE)
+            if match:
+                width = int(match.group(1))
+                height = int(match.group(2))
+                quality_info['resolution'] = f"{width}x{height}"
+                quality_info['resolution_width'] = width
+                quality_info['resolution_height'] = height
+                quality_info['pixels'] = width * height
+                break
+
+        # Ищем битрейт
+        bitrate_patterns = [
+            r'bitrate:\s*(\d+)\s*kb/s',
+            r'bitrate:\s*(\d+)\s*kbps',
+            r'bitrate\s*(\d+)\s*k',
+            r'(\d+)\s*kb/s'
+        ]
+
+        for pattern in bitrate_patterns:
+            match = re.search(pattern, output)
+            if match:
+                quality_info['bitrate'] = int(match.group(1))
+                break
+
+        # Ищем FPS
+        fps_patterns = [
+            r'(\d+(?:\.\d+)?)\s*fps',
+            r'fps:\s*(\d+(?:\.\d+)?)',
+            r'(\d+(?:\.\d+)?)\s*tbr'
+        ]
+
+        for pattern in fps_patterns:
+            match = re.search(pattern, output)
+            if match:
+                quality_info['fps'] = float(match.group(1))
+                break
+
+        # Ищем кодеки
+        codec_patterns = {
+            'video': r'Video:\s*([^\s,]+)',
+            'audio': r'Audio:\s*([^\s,]+)'
+        }
+
+        for stream_type, pattern in codec_patterns.items():
+            match = re.search(pattern, output, re.IGNORECASE)
+            if match:
+                quality_info[f'{stream_type}_codec'] = match.group(1)
+
+        # Ищем длительность
+        duration_pattern = r'Duration:\s*(\d{2}):(\d{2}):(\d{2})\.\d+'
+        match = re.search(duration_pattern, output)
+        if match:
+            hours, minutes, seconds = map(int, match.groups())
+            quality_info['duration_seconds'] = hours * 3600 + minutes * 60 + seconds
+
+        return quality_info if quality_info['resolution'] else None
+
+    def check_quality_requirements(self, quality_info):
+        """Проверяет, соответствует ли поток минимальным требованиям"""
+        requirements_met = True
+
+        # Проверка разрешения
+        if 'pixels' in quality_info:
+            if quality_info['pixels'] < self.min_video_resolution * 854:  # Пример: 480p = 480*854
+                print(f"    ⚠️  Низкое разрешение: {quality_info.get('resolution', 'N/A')}")
+                requirements_met = False
+
+        # Проверка битрейта
+        if quality_info.get('bitrate'):
+            if quality_info['bitrate'] < self.required_bitrate:
+                print(f"    ⚠️  Низкий битрейт: {quality_info['bitrate']}kbps")
+                requirements_met = False
+
+        # Проверка FPS
+        if quality_info.get('fps'):
+            if quality_info['fps'] < self.required_fps:
+                print(f"    ⚠️  Низкий FPS: {quality_info['fps']}")
+                requirements_met = False
+
+        return requirements_met
+
+    def calculate_quality_score(self, quality_info):
+        """Рассчитывает общий балл качества"""
+        score = 0
+
+        # Оценка разрешения
+        if 'pixels' in quality_info:
+            pixels = quality_info['pixels']
+            if pixels >= 3840*2160:  # 4K
+                score += 100 * self.quality_weights['resolution']
+            elif pixels >= 1920*1080:  # Full HD
+                score += 80 * self.quality_weights['resolution']
+            elif pixels >= 1280*720:  # HD
+                score += 60 * self.quality_weights['resolution']
+            elif pixels >= 854*480:  # SD
+                score += 40 * self.quality_weights['resolution']
+            else:
+                score += 20 * self.quality_weights['resolution']
+
+        # Оценка битрейта
+        if quality_info.get('bitrate'):
+            bitrate = quality_info['bitrate']
+            if bitrate >= 8000:  # Очень высокий
+                score += 100 * self.quality_weights['bitrate']
+            elif bitrate >= 4000:  # Высокий
+                score += 80 * self.quality_weights['bitrate']
+            elif bitrate >= 2000:  # Средний
+                score += 60 * self.quality_weights['bitrate']
+            elif bitrate >= 1000:  # Низкий
+                score += 40 * self.quality_weights['bitrate']
+            elif bitrate >= 500:  # Очень низкий
+                score += 20 * self.quality_weights['bitrate']
+            else:
+                score += 10 * self.quality_weights['bitrate']
+
+        # Оценка кодеков
+        video_codec = quality_info.get('video_codec', '').lower()
+        if 'h265' in video_codec or 'hevc' in video_codec:
+            score += 100 * self.quality_weights['codec']
+        elif 'h264' in video_codec or 'avc' in video_codec:
+            score += 80 * self.quality_weights['codec']
+        elif 'vp9' in video_codec:
+            score += 70 * self.quality_weights['codec']
+        elif 'mpeg4' in video_codec:
+            score += 50 * self.quality_weights['codec']
+
+        # Оценка FPS
+        if quality_info.get('fps'):
+            fps = quality_info['fps']
+            if fps >= 60:
+                score += 100 * self.quality_weights['fps']
+            elif fps >= 50:
+                score += 90 * self.quality_weights['fps']
+            elif fps >= 30:
+                score += 80 * self.quality_weights['fps']
+            elif fps >= 25:
+                score += 70 * self.quality_weights['fps']
+            elif fps >= 20:
+                score += 50 * self.quality_weights['fps']
+            else:
+                score += 30 * self.quality_weights['fps']
+
+        return min(100, int(score))
+
+    def print_quality_info(self, quality_info):
+        """Выводит информацию о качестве"""
+        if not quality_info:
+            return
+
+        resolution = quality_info.get('resolution', 'N/A')
+        bitrate = quality_info.get('bitrate', 'N/A')
+        fps = quality_info.get('fps', 'N/A')
+        video_codec = quality_info.get('video_codec', 'N/A')
+        quality_score = quality_info.get('quality_score', 0)
+
+        quality_level = "🔴 Низкое"
+        if quality_score >= 80:
+            quality_level = "🟢 Отличное"
+        elif quality_score >= 60:
+            quality_level = "🟡 Хорошее"
+        elif quality_score >= 40:
+            quality_level = "🟠 Среднее"
+
+        print(f"    📈 Качество: {quality_level} ({quality_score}/100)")
+        print(f"    📏 Разрешение: {resolution}")
+        if bitrate != 'N/A':
+            print(f"    📊 Битрейт: {bitrate}kbps")
+        if fps != 'N/A':
+            print(f"    ⚡ FPS: {fps}")
+        print(f"    🎬 Кодек: {video_codec}")
 
     def search_iptv_sources(self, channel_name):
         """Поиск в IPTV источниках из site.txt"""
@@ -576,7 +854,7 @@ class OnlineM3UScanner:
             name_lower.replace('tv', 'тв'),
             name_lower + ' tv',
             name_lower + ' тв',
-        ]
+            ]
 
         # Убираем "канал" и "channel"
         if 'канал' in name_lower:
@@ -658,7 +936,7 @@ class OnlineM3UScanner:
         return info
 
     def check_single_stream_improved(self, stream_info):
-        """Проверка работоспособности ссылки"""
+        """Проверка работоспособности ссылки с анализом качества"""
         try:
             url = stream_info['url']
             channel_name = stream_info.get('name', 'Unknown')
@@ -672,7 +950,16 @@ class OnlineM3UScanner:
             if 'youtube.com/watch' in url or 'youtu.be' in url:
                 response = self.make_request(url, 'HEAD', max_retries=1)
                 if response and response.getcode() == 200:
-                    return {**stream_info, 'working': True, 'status': 'YouTube доступен', 'quality': 'high', 'stable': True}
+                    # Для YouTube оцениваем качество по названию
+                    quality_score = 70  # Базовая оценка для YouTube
+                    return {
+                        **stream_info,
+                        'working': True,
+                        'status': 'YouTube доступен',
+                        'quality': 'high',
+                        'stable': True,
+                        'quality_score': quality_score
+                    }
                 else:
                     return {**stream_info, 'working': False, 'status': 'YouTube недоступен', 'quality': 'none', 'stable': False}
 
@@ -681,20 +968,42 @@ class OnlineM3UScanner:
                 response = self.make_request(url, 'HEAD')
                 if response and response.getcode() == 200:
                     # Проверка через FFmpeg если доступен
-                    ffmpeg_path = self.find_ffmpeg()
-                    if ffmpeg_path:
+                    if self.ffmpeg_path and self.enable_deep_check:
                         try:
-                            cmd = [ffmpeg_path, '-i', url, '-t', '3', '-f', 'null', '-', '-hide_banner', '-loglevel', 'error']
+                            # Базовая проверка доступности
+                            cmd = [self.ffmpeg_path, '-i', url, '-t', '3', '-f', 'null', '-', '-hide_banner', '-loglevel', 'error']
                             result = subprocess.run(cmd, capture_output=True, timeout=10)
                             if result.returncode == 0:
-                                return {**stream_info, 'working': True, 'status': 'FFmpeg проверен', 'quality': 'high', 'stable': True}
+                                # Расширенный анализ качества
+                                quality_info = self.analyze_stream_quality(url)
+
+                                if quality_info and quality_info.get('meets_requirements', False):
+                                    quality_score = quality_info.get('quality_score', 50)
+                                    quality_level = "high" if quality_score >= 70 else "medium" if quality_score >= 50 else "low"
+
+                                    return {
+                                        **stream_info,
+                                        'working': True,
+                                        'status': 'FFmpeg проверен',
+                                        'quality': quality_level,
+                                        'stable': True,
+                                        'quality_score': quality_score,
+                                        'video_info': quality_info
+                                    }
                         except:
                             pass
 
                     # Базовая проверка
                     content_type = response.headers.get('Content-Type', '').lower()
                     if any(ct in content_type for ct in ['video', 'application', 'mpegurl']):
-                        return {**stream_info, 'working': True, 'status': 'M3U8 доступен', 'quality': 'medium', 'stable': True}
+                        return {
+                            **stream_info,
+                            'working': True,
+                            'status': 'M3U8 доступен',
+                            'quality': 'medium',
+                            'stable': True,
+                            'quality_score': 50
+                        }
 
             # M3U ссылки
             elif '.m3u' in url.lower() and not url.endswith('.m3u8'):
@@ -702,56 +1011,123 @@ class OnlineM3UScanner:
                 if response and response.getcode() == 200:
                     content = response.read(2048).decode('utf-8', errors='ignore')
                     if '#EXTM3U' in content:
-                        return {**stream_info, 'working': True, 'status': 'M3U валидный', 'quality': 'medium', 'stable': True}
+                        return {
+                            **stream_info,
+                            'working': True,
+                            'status': 'M3U валидный',
+                            'quality': 'medium',
+                            'stable': True,
+                            'quality_score': 40
+                        }
 
             # Общая проверка
             response = self.make_request(url, 'HEAD')
             if response and response.getcode() == 200:
                 content_type = response.headers.get('Content-Type', '').lower()
                 if any(ct in content_type for ct in ['video/', 'audio/', 'application/']):
-                    return {**stream_info, 'working': True, 'status': 'Поток доступен', 'quality': 'medium', 'stable': False}
+                    return {
+                        **stream_info,
+                        'working': True,
+                        'status': 'Поток доступен',
+                        'quality': 'medium',
+                        'stable': False,
+                        'quality_score': 30
+                    }
 
-            return {**stream_info, 'working': False, 'status': 'Не доступен', 'quality': 'none', 'stable': False}
+            return {
+                **stream_info,
+                'working': False,
+                'status': 'Не доступен',
+                'quality': 'none',
+                'stable': False,
+                'quality_score': 0
+            }
 
         except Exception as e:
-            return {**stream_info, 'working': False, 'status': f'Ошибка: {str(e)}', 'quality': 'none', 'stable': False}
+            return {
+                **stream_info,
+                'working': False,
+                'status': f'Ошибка: {str(e)}',
+                'quality': 'none',
+                'stable': False,
+                'quality_score': 0
+            }
 
     def check_streams(self, streams):
-        """Проверяет все найденные ссылки"""
+        """Проверяет все найденные ссылки с анализом качества"""
         if not streams:
             return []
 
         print(f"🔧 Проверка {len(streams)} найденных ссылок...")
         working_streams = []
 
-        # Сортируем по стабильности
-        sorted_streams = sorted(streams, key=lambda x: x.get('stability_score', 0), reverse=True)
+        # Сортируем по стабильности и качеству
+        sorted_streams = sorted(streams, key=lambda x: (
+            x.get('stability_score', 0),
+            x.get('quality_score', 0)
+        ), reverse=True)
 
         for i, stream in enumerate(sorted_streams, 1):
             result = self.check_single_stream_improved(stream)
             if result:
                 if result['working']:
                     working_streams.append(result)
+
+                    # Определяем иконки для отображения
                     stability_icon = '🟢' if result.get('stable') else '🟡'
-                    quality_icon = '🟢' if result.get('quality') == 'high' else '🟡' if result.get('quality') == 'medium' else '🔴'
-                    print(f"  [{i}/{len(streams)}] ✅ {quality_icon}{stability_icon} РАБОТАЕТ - {result['status']}")
+
+                    quality_score = result.get('quality_score', 0)
+                    if quality_score >= 70:
+                        quality_icon = '🟢'
+                        quality_text = 'ВЫСОКОЕ'
+                    elif quality_score >= 50:
+                        quality_icon = '🟡'
+                        quality_text = 'СРЕДНЕЕ'
+                    elif quality_score >= 30:
+                        quality_icon = '🟠'
+                        quality_text = 'НИЗКОЕ'
+                    else:
+                        quality_icon = '🔴'
+                        quality_text = 'ОЧЕНЬ НИЗКОЕ'
+
+                    # Добавляем информацию о качестве в вывод
+                    quality_info = ""
+                    if result.get('video_info'):
+                        video_info = result['video_info']
+                        if video_info.get('resolution'):
+                            quality_info = f" [{video_info['resolution']}]"
+                        elif video_info.get('bitrate'):
+                            quality_info = f" [{video_info['bitrate']}kbps]"
+
+                    print(f"  [{i}/{len(streams)}] ✅ {quality_icon}{stability_icon} РАБОТАЕТ ({quality_text}{quality_info}) - {result['status']}")
                 else:
                     print(f"  [{i}/{len(streams)}] ❌ Не работает - {result['status']}")
 
             if i < len(streams):
                 time.sleep(1)
 
-        # Фильтруем стабильные потоки
-        stable_working = [s for s in working_streams if s.get('stable', False)]
-        if stable_working:
-            return stable_working[:5]
-        else:
-            return working_streams[:3]
+        # Фильтруем по качеству и стабильности
+        if working_streams:
+            # Сортируем по качеству
+            working_streams.sort(key=lambda x: (
+                x.get('quality_score', 0),
+                x.get('stable', False)
+            ), reverse=True)
+
+            # Возвращаем только лучшие потоки
+            high_quality = [s for s in working_streams if s.get('quality_score', 0) >= 50]
+            if high_quality:
+                return high_quality[:5]
+            else:
+                return working_streams[:3]
+
+        return []
 
     def search_and_update_channel(self, channel_name):
         """Поиск и обновление канала"""
         print(f"\n🚀 Поиск: '{channel_name}'")
-        print("⏳ Это может занять 1-2 минуты...")
+        print(f"⚙️  Настройки проверки: Глубокая проверка={'ВКЛ' if self.enable_deep_check else 'ВЫКЛ'}, Длительность={self.check_duration}с")
+        print("⏳ Это может занять 2-3 минуты...")
 
         # Загружаем существующие каналы
         existing_channels = self.load_existing_channels()
@@ -779,24 +1155,46 @@ class OnlineM3UScanner:
                 return True
             return False
 
-        # Проверка работоспособности
+        # Проверка работоспособности с анализом качества
         working_streams = self.check_streams(all_streams)
         search_time = time.time() - start_time
 
         if working_streams:
-            # Добавляем категорию
+            # Добавляем категорию и информацию о качестве
             for stream in working_streams:
                 stream['group'] = category
+
+                # Добавляем дополнительную информацию о качестве в группу
+                quality_info = ""
+                if stream.get('video_info'):
+                    vi = stream['video_info']
+                    if vi.get('resolution'):
+                        quality_info = f" [{vi['resolution']}"
+                        if vi.get('bitrate'):
+                            quality_info += f" {vi['bitrate']}kbps"
+                        quality_info += "]"
+
+                if quality_info:
+                    stream['group'] = f"{category}{quality_info}"
 
             # Объединяем старые и новые ссылки
             combined_streams = self.merge_streams(old_streams, working_streams)
 
-            print("\n🎉" + "=" * 50)
+            print("\n🎉" + "=" * 60)
             print(f"✅ НАЙДЕНО РАБОЧИХ ССЫЛОК: {len(working_streams)}")
             print(f"🎯 СТАБИЛЬНЫХ ПОТОКОВ: {len([s for s in working_streams if s.get('stable')])}")
+
+            # Статистика качества
+            quality_stats = {
+                'high': len([s for s in working_streams if s.get('quality_score', 0) >= 70]),
+                'medium': len([s for s in working_streams if 50 <= s.get('quality_score', 0) < 70]),
+                'low': len([s for s in working_streams if s.get('quality_score', 0) < 50])
+            }
+
+            print(f"📈 КАЧЕСТВО: 🟢{quality_stats['high']} 🟡{quality_stats['medium']} 🟠{quality_stats['low']}")
             print(f"📂 Категория: {category}")
             print(f"⏱️  Время поиска: {search_time:.1f} секунд")
-            print("=" * 50)
+            print("=" * 60)
 
             # Обновляем канал
             success = self.update_channel_in_playlist(final_channel_name, combined_streams)
@@ -804,6 +1202,18 @@ class OnlineM3UScanner:
             if success:
                 print(f"\n🔄 КАНАЛ ОБНОВЛЕН: {final_channel_name}")
                 print(f"📺 Всего ссылок: {len(combined_streams)}")
+
+                # Выводим информацию о лучшем потоке
+                if combined_streams:
+                    best_stream = max(combined_streams, key=lambda x: x.get('quality_score', 0))
+                    quality_score = best_stream.get('quality_score', 0)
+                    print(f"🏆 Лучшее качество: {quality_score}/100")
+
+                    if best_stream.get('video_info'):
+                        vi = best_stream['video_info']
+                        print(f"   📏 Разрешение: {vi.get('resolution', 'N/A')}")
+                        print(f"   📊 Битрейт: {vi.get('bitrate', 'N/A')}kbps")
+                        print(f"   🎬 Кодек: {vi.get('video_codec', 'N/A')}")
             return True
 
         else:
@@ -816,25 +1226,33 @@ class OnlineM3UScanner:
                 return False
 
     def merge_streams(self, old_streams, new_streams):
-        """Объединяет ссылки"""
+        """Объединяет ссылки с учетом качества"""
         merged = []
         seen_urls = set()
 
-        # Сначала новые
+        # Сначала новые с высоким качеством
         for stream in new_streams:
-            if stream['url'] not in seen_urls and stream.get('working', True):
+            if (stream['url'] not in seen_urls and
+                    stream.get('working', True) and
+                    stream.get('quality_score', 0) >= 50):
                 merged.append(stream)
                 seen_urls.add(stream['url'])
 
         # Затем старые стабильные
         for stream in old_streams:
             if (stream['url'] not in seen_urls and
-                stream.get('working', True) and
-                stream.get('stable', False)):
+                    stream.get('working', True) and
+                    stream.get('stable', False)):
                 merged.append(stream)
                 seen_urls.add(stream['url'])
 
-        return merged
+        # Затем остальные новые
+        for stream in new_streams:
+            if stream['url'] not in seen_urls and stream.get('working', True):
+                merged.append(stream)
+                seen_urls.add(stream['url'])
+
+        return merged[:10]  # Ограничиваем количество ссылок
 
     def update_channel_in_playlist(self, channel_name, new_streams):
         """Обновляет канал в плейлисте"""
@@ -897,7 +1315,7 @@ class OnlineM3UScanner:
         return channels
 
     def save_full_playlist(self, channels_dict):
-        """Сохраняет плейлист"""
+        """Сохраняет плейлист с информацией о качестве"""
         try:
             os.makedirs(os.path.dirname(self.playlist_file), exist_ok=True)
 
@@ -930,6 +1348,13 @@ class OnlineM3UScanner:
                             extinf_parts.append(f'quality="{stream["quality"]}"')
                         if stream.get('stable'):
                             extinf_parts.append(f'stable="{stream["stable"]}"')
+                        if stream.get('quality_score'):
+                            extinf_parts.append(f'quality-score="{stream["quality_score"]}"')
+
+                        # Добавляем информацию о разрешении если есть
+                        if stream.get('video_info') and stream['video_info'].get('resolution'):
+                            extinf_parts.append(f'resolution="{stream["video_info"]["resolution"]}"')
+
                         extinf_parts.append(f', {stream["name"]}')
                         f.write(' '.join(extinf_parts) + '\n')
                         f.write(f'{stream["url"]}\n')
@@ -1052,6 +1477,7 @@ https://edge1.1internet.tv/
             return
 
         print(f"🎯 ПОИСК ПО СПИСКУ ИЗ {len(self.channels_list)} КАНАЛОВ...")
+        print(f"⚙️  Настройки: Глубокая проверка={'ВКЛ' if self.enable_deep_check else 'ВЫКЛ'}")
         success_count = 0
         failed_count = 0
 
@@ -1080,15 +1506,60 @@ https://edge1.1internet.tv/
         print(f"✅ Найдено: {success_count} каналов")
         print(f"❌ Не найдено: {failed_count} каналов")
 
+        # Выводим статистику качества
+        if self.stats['quality_checks'] > 0:
+            print(f"\n📊 СТАТИСТИКА КАЧЕСТВА:")
+            print(f"   🔍 Проверок качества: {self.stats['quality_checks']}")
+            print(f"   ❌ Неудачных проверок: {self.stats['failed_quality_checks']}")
+
+    def show_quality_settings(self):
+        """Показывает текущие настройки качества"""
+        print("\n⚙️  ТЕКУЩИЕ НАСТРОЙКИ КАЧЕСТВА:")
+        print(f"   📊 Глубокая проверка: {'ВКЛ' if self.enable_deep_check else 'ВЫКЛ'}")
+        print(f"   ⏱️  Длительность проверки: {self.check_duration} секунд")
+        print(f"   📶 Минимальный битрейт: {self.required_bitrate} kbps")
+        print(f"   📏 Минимальное разрешение: {self.min_video_resolution}p")
+        print(f"   ⚡ Минимальный FPS: {self.required_fps}")
+        print(f"   ⏰ Таймаут проверки: {self.check_timeout} секунд")
+
+    def update_quality_settings(self):
+        """Обновляет настройки качества"""
+        print("\n⚙️  ОБНОВЛЕНИЕ НАСТРОЕК КАЧЕСТВА:")
+
+        try:
+            enable = input("Включить глубокую проверку? (y/n, текущее: {}): ".format(
+                "ВКЛ" if self.enable_deep_check else "ВЫКЛ"
+            )).strip().lower()
+            if enable in ['y', 'yes', 'да']:
+                self.enable_deep_check = True
+            elif enable in ['n', 'no', 'нет']:
+                self.enable_deep_check = False
+
+            duration = input("Длительность проверки (секунды, текущее: {}): ".format(
+                self.check_duration
+            )).strip()
+            if duration.isdigit() and 1 <= int(duration) <= 30:
+                self.check_duration = int(duration)
+
+            bitrate = input("Минимальный битрейт (kbps, текущее: {}): ".format(
+                self.required_bitrate
+            )).strip()
+            if bitrate.isdigit() and 100 <= int(bitrate) <= 10000:
+                self.required_bitrate = int(bitrate)
+
+            print("✅ Настройки обновлены")
+        except:
+            print("❌ Ошибка обновления настроек")
+
 def interactive_mode():
     """Интерактивный режим"""
     scanner = OnlineM3UScanner()
 
     print("🎬" + "=" * 70)
-    print("🌐 SMART M3U SCANNER")
+    print("🌐 SMART M3U SCANNER С АНАЛИЗОМ КАЧЕСТВА")
     print("🎯 РАБОТАЕТ С ФАЙЛАМИ:")
     print(f"   📁 {scanner.sites_file} - источники для поиска")
-    print(f"   📁 {scanner.cartolog_file} - категории каналов")  # ИСПРАВЛЕНО: cartolog.txt -> cartolog_file
+    print(f"   📁 {scanner.cartolog_file} - категории каналов")
     print(f"   📁 {scanner.channels_file} - список каналов для поиска")
     print("🎬" + "=" * 70)
 
@@ -1107,27 +1578,35 @@ def interactive_mode():
     print(f"   📺 {len(scanner.channels_list)} каналов из Channels.txt")
 
     # Проверяем ffmpeg
-    ffmpeg_path = scanner.find_ffmpeg()
-    if ffmpeg_path:
-        print("✅ FFmpeg обнаружен")
+    if scanner.ffmpeg_path:
+        print(f"✅ FFmpeg обнаружен: {scanner.ffmpeg_path}")
+        if scanner.enable_deep_check:
+            print("🔍 Расширенный анализ качества: ВКЛ")
+        else:
+            print("🔍 Расширенный анализ качества: ВЫКЛ")
     else:
         print("ℹ️  FFmpeg не найден - используется базовая проверка")
 
     existing_channels = scanner.load_existing_channels()
     if existing_channels:
         total_streams = sum(len(streams) for streams in existing_channels.values())
+        high_quality = sum(1 for streams in existing_channels.values()
+                           for s in streams if s.get('quality') in ['high', 'medium'])
         print(f"📊 В плейлисте: {len(existing_channels)} каналов, {total_streams} ссылок")
+        print(f"🎯 Качественных ссылок: {high_quality}")
     else:
         print("📝 Плейлист будет создан при первом поиске")
+
     while True:
         print("\n" + "🎯" + "=" * 60)
         print("1. 🔍 Поиск одного канала")
         print("2. 📋 Поиск по списку из Channels.txt")
         print("3. 🔄 Обновить все каналы")
-        print("4. 📊 Статистика")
-        print("5. 🚪 Выход")
+        print("4. ⚙️  Настройки качества")
+        print("5. 📊 Статистика")
+        print("6. 🚪 Выход")
 
-        choice = input("\nВыберите действие (1-5): ").strip()
+        choice = input("\nВыберите действие (1-6): ").strip()
 
         if choice == '1':
             channel_name = input("📺 Введите название канала: ").strip()
@@ -1147,18 +1626,34 @@ def interactive_mode():
                 scanner.refresh_all_channels()
 
         elif choice == '4':
+            scanner.show_quality_settings()
+            change = input("\nИзменить настройки? (y/n): ").strip().lower()
+            if change in ['y', 'yes', 'да']:
+                scanner.update_quality_settings()
+
+        elif choice == '5':
             existing_channels = scanner.load_existing_channels()
             if existing_channels:
                 total_streams = sum(len(streams) for streams in existing_channels.values())
-                high_quality = sum(1 for streams in existing_channels.values() for s in streams if s.get('quality') in ['high', 'medium'])
+                high_quality = sum(1 for streams in existing_channels.values()
+                                   for s in streams if s.get('quality') in ['high', 'medium'])
                 print(f"\n📊 СТАТИСТИКА:")
                 print(f"   📁 Каналов: {len(existing_channels)}")
                 print(f"   🔗 Ссылок: {total_streams}")
                 print(f"   🎯 Качественных: {high_quality}")
+                print(f"   📡 Запросов: {scanner.stats['total_requests']}")
+                print(f"   ✅ Успешных: {scanner.stats['successful_requests']}")
+                print(f"   ❌ Неудачных: {scanner.stats['failed_requests']}")
+                print(f"   ⏱️  Среднее время: {scanner.stats['avg_response_time']:.2f}с")
+
+                if scanner.stats['quality_checks'] > 0:
+                    print(f"\n📊 СТАТИСТИКА КАЧЕСТВА:")
+                    print(f"   🔍 Проверок качества: {scanner.stats['quality_checks']}")
+                    print(f"   ❌ Неудачных: {scanner.stats['failed_quality_checks']}")
             else:
                 print("📝 Плейлист пуст")
 
-        elif choice == '5':
+        elif choice == '6':
             print("👋 Выход...")
             break
 
@@ -1190,7 +1685,7 @@ def main():
         except ImportError:
             print("❌ Графический интерфейс не найден")
     else:
-        print("🌐 Smart M3U Scanner")
+        print("🌐 Smart M3U Scanner с анализом качества")
         print("Использование:")
         print("  python M3UScanner.py          - Консольный режим")
         print("  python M3UScanner.py --gui    - Графический интерфейс")
