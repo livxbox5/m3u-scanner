@@ -18,17 +18,18 @@ https://list.iptvcat.com/my_list/.m3u8
 https://ngtrk.dc.beltelecom.by/ngtrk/smil:informacionnyy.smil/playlist.m3u8
 #EXTINF:-1 group-title="Музыка" quality="medium" , RUTV
 https://list.iptvcat.com/my_list/.m3u8
-#EXTINF:-1 group-title="Музыка" quality="medium" , RUTV
+#EXTINF:-1 group-title="Музыкальные" quality="medium" , RUTV
 https://list.iptvcat.com/my_list/.m3u
-#EXTINF:-1 group-title="Музыка" quality="medium" , МузТВ
+#EXTINF:-1 group-title="Музыкальные" quality="medium" , МузТВ
 https://list.iptvcat.com/my_list/.m3u8
-#EXTINF:-1 group-title="Музыка" quality="medium" , МузТВ
+#EXTINF:-1 group-title="Музыкальные" quality="medium" , МузТВ
 https://list.iptvcat.com/my_list/.m3u
-#EXTINF:-1 group-title="Музыка" quality="medium" stable="True" quality-score="50" , Музыка Первого
+#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" quality-score="50" , Музыка Первого
 https://list.iptvcat.com/my_list/.m3u8
-#EXTINF:-1 group-title="Музыка" quality="medium" stable="True" quality-score="50" , Музыка Первого
+#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" quality-score="50" , Музыка Первого
 http://hz1.teleport.cc/HLS/SD.m3u8
-#EXTINF:-1 group-title="Музыка" quality="medium" stable="True" quality-score="50" , MTV Bridge
+#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" quality-score="50" , MTV Bridge
 https://list.iptvcat.com/my_list/.m3u8
-#EXTINF:-1 group-title="Музыка" quality="medium" stable="True" quality-score="50" , MTV Bridge
+#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" quality-score="50" , MTV Bridge
 https://hms.pfs.gdn/v1/broadcast/mtv/playlist.m3u8
+
