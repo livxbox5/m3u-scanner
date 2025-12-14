@@ -12,19 +12,20 @@ https://edge1.1internet.tv/
 https://edge1.1internet.tv/
 #############################
 
-#EXTINF:-1 group-title="Общие" quality="medium" , Первый канал
+#EXTINF:-1 group-title="Новости" quality="medium" , Первый канал
 https://list.iptvcat.com/my_list/.m3u8
-#EXTINF:-1 group-title="Общие" quality="medium" , Первый канал
+#EXTINF:-1 group-title="Новости" quality="medium" , Первый канал
 https://ngtrk.dc.beltelecom.by/ngtrk/smil:informacionnyy.smil/playlist.m3u8
-#EXTINF:-1 group-title="Общие" quality="medium" , RUTV
+#EXTINF:-1 group-title="Музыка" quality="medium" , RUTV
 https://list.iptvcat.com/my_list/.m3u8
-#EXTINF:-1 group-title="Общие" quality="medium" , RUTV
+#EXTINF:-1 group-title="Музыка" quality="medium" , RUTV
 https://list.iptvcat.com/my_list/.m3u
-#EXTINF:-1 group-title="Общие" quality="medium" , МузТВ
+#EXTINF:-1 group-title="Музыка" quality="medium" , МузТВ
 https://list.iptvcat.com/my_list/.m3u8
-#EXTINF:-1 group-title="Общие" quality="medium" , МузТВ
+#EXTINF:-1 group-title="Музыка" quality="medium" , МузТВ
 https://list.iptvcat.com/my_list/.m3u
 #EXTINF:-1 group-title="Музыка" quality="medium" stable="True" quality-score="50" , Музыка Первого
 https://list.iptvcat.com/my_list/.m3u8
 #EXTINF:-1 group-title="Музыка" quality="medium" stable="True" quality-score="50" , Музыка Первого
 http://hz1.teleport.cc/HLS/SD.m3u8
+
