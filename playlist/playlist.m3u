@@ -16,7 +16,7 @@ https://edge1.1internet.tv/
 https://list.iptvcat.com/my_list/.m3u8
 #EXTINF:-1 group-title="Новости" quality="medium" , Первый канал
 https://ngtrk.dc.beltelecom.by/ngtrk/smil:informacionnyy.smil/playlist.m3u8
-#EXTINF:-1 group-title="Музыка" quality="medium" , RUTV
+#EXTINF:-1 group-title="Музыкальные" quality="medium" , RUTV
 https://list.iptvcat.com/my_list/.m3u8
 #EXTINF:-1 group-title="Музыкальные" quality="medium" , RUTV
 https://list.iptvcat.com/my_list/.m3u
@@ -24,12 +24,23 @@ https://list.iptvcat.com/my_list/.m3u
 https://list.iptvcat.com/my_list/.m3u8
 #EXTINF:-1 group-title="Музыкальные" quality="medium" , МузТВ
 https://list.iptvcat.com/my_list/.m3u
-#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" quality-score="50" , Музыка Первого
+#EXTINF:-1 group-title="Музыкальные" quality="medium" , Музыка Первого
 https://list.iptvcat.com/my_list/.m3u8
-#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" quality-score="50" , Музыка Первого
+#EXTINF:-1 group-title="Музыкальные" quality="medium" , Музыка Первого
 http://hz1.teleport.cc/HLS/SD.m3u8
-#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" quality-score="50" , MTV Bridge
+#EXTINF:-1 group-title="Музыкальные" quality="medium" , MTV Bridge
 https://list.iptvcat.com/my_list/.m3u8
-#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" quality-score="50" , MTV Bridge
+#EXTINF:-1 group-title="Музыкальные" quality="medium" , MTV Bridge
 https://hms.pfs.gdn/v1/broadcast/mtv/playlist.m3u8
-
+#EXTINF:-1 group-title="Музыкальные" quality="medium" , MTV 00s
+https://list.iptvcat.com/my_list/.m3u8
+#EXTINF:-1 group-title="Музыкальные" quality="medium" , MTV 00s
+https://hms.pfs.gdn/v1/broadcast/mtv/playlist.m3u8
+#EXTINF:-1 group-title="Музыкальные" quality="medium" , MTV 80s
+https://list.iptvcat.com/my_list/.m3u8
+#EXTINF:-1 group-title="Музыкальные" quality="medium" , MTV 80s
+https://hms.pfs.gdn/v1/broadcast/mtv/playlist.m3u8
+#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" quality-score="50" , MTV 90s
+https://list.iptvcat.com/my_list/.m3u8
+#EXTINF:-1 group-title="Музыкальные" quality="medium" stable="True" quality-score="50" , MTV 90s
+https://hms.pfs.gdn/v1/broadcast/mtv/playlist.m3u8
