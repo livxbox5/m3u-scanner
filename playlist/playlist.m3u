@@ -1,6 +1,6 @@
 #EXTM3U
-# Обновлен: 2025-11-19 18:14:41
-# Всего каналов: 1
+# Обновлен: 2025-12-14 17:33:41
+# Всего каналов: 3
 # Всего ссылок: 2
 
 #############################
@@ -12,7 +12,19 @@ https://edge1.1internet.tv/
 https://edge1.1internet.tv/
 #############################
 
-#EXTINF:-1 group-title="Общие" quality="medium" stable="True" quality-score="50" , Первый канал
+#EXTINF:-1 group-title="Общие" quality="medium" , Первый канал
 https://list.iptvcat.com/my_list/.m3u8
-#EXTINF:-1 group-title="Общие" quality="medium" stable="True" quality-score="50" , Первый канал
+#EXTINF:-1 group-title="Общие" quality="medium" , Первый канал
 https://ngtrk.dc.beltelecom.by/ngtrk/smil:informacionnyy.smil/playlist.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" , RUTV
+https://list.iptvcat.com/my_list/.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" , RUTV
+https://list.iptvcat.com/my_list/.m3u
+#EXTINF:-1 group-title="Общие" quality="medium" , МузТВ
+https://list.iptvcat.com/my_list/.m3u8
+#EXTINF:-1 group-title="Общие" quality="medium" , МузТВ
+https://list.iptvcat.com/my_list/.m3u
+#EXTINF:-1 group-title="Музыка" quality="medium" stable="True" quality-score="50" , Музыка Первого
+https://list.iptvcat.com/my_list/.m3u8
+#EXTINF:-1 group-title="Музыка" quality="medium" stable="True" quality-score="50" , Музыка Первого
+http://hz1.teleport.cc/HLS/SD.m3u8
