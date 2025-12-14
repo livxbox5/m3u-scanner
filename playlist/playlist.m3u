@@ -1,7 +1,7 @@
 #EXTM3U
 # Обновлен: 2025-11-19 18:14:41
-# Всего каналов: 13
-# Всего ссылок: 15
+# Всего каналов: 1
+# Всего ссылок: 2
 
 #############################
 #EXTINF:-1 group-title="INFOℹ️" quality="medium" , ТГ канал https://t.me/NexusIPTVGroups
@@ -12,13 +12,7 @@ https://edge1.1internet.tv/
 https://edge1.1internet.tv/
 #############################
 
-#EXTINF:-1 group-title="Новостные" quality="medium" stable="True" , Первый канал #1
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" quality-score="50" , Первый канал
 https://list.iptvcat.com/my_list/.m3u8
-#EXTINF:-1 group-title="Новостные" quality="medium" stable="True" , Первый канал #2
-https://list.iptvcat.com/my_list/.m3u
-#EXTINF:-1 group-title="Новостные" quality="medium" stable="True" , Первый канал #3
-https://live.freetv.top/huyayqk.m3u
-#EXTINF:-1 group-title="Новостные" quality="medium" stable="True" , Первый канал #4
-https://gh-proxy.com/https://raw.githubusercontent.com/fanmingming/live/main/tv/m3u/ipv6.m3u
-#EXTINF:-1 group-title="Новостные" quality="medium" stable="True" , Первый канал #5
-https://tmxk.pp.ua/4gtv-cn.m3u
+#EXTINF:-1 group-title="Общие" quality="medium" stable="True" quality-score="50" , Первый канал
+https://ngtrk.dc.beltelecom.by/ngtrk/smil:informacionnyy.smil/playlist.m3u8
