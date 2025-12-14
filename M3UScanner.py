@@ -187,16 +187,51 @@ class OnlineM3UScanner:
             print(f"❌ Файл {self.cartolog_file} не найден!")
         return categories
 
-    def get_channel_category(self, channel_name):
-        """Определяет категорию для канала из cartolog.txt"""
+    def get_channel_category_improved(self, channel_name):
+        """Улучшенное определение категории для канала из cartolog.txt"""
+        # Прямое совпадение
         if channel_name in self.channel_categories:
             return self.channel_categories[channel_name]
 
+        # Частичное совпадение
         for channel_pattern, category in self.channel_categories.items():
-            if channel_pattern in channel_name or channel_name in channel_pattern:
+            # Если паттерн содержится в названии канала
+            if channel_pattern.lower() in channel_name.lower():
+                return category
+            # Если название канала содержится в паттерне
+            if channel_name.lower() in channel_pattern.lower():
+                return category
+
+        # Совпадение по ключевым словам
+        keywords = {
+            'новости': 'Новости',
+            'news': 'Новости',
+            'спорт': 'Спорт',
+            'sport': 'Спорт',
+            'кино': 'Кино',
+            'фильм': 'Кино',
+            'movie': 'Кино',
+            'музыка': 'Музыка',
+            'music': 'Музыка',
+            'детский': 'Детские',
+            'kids': 'Детские',
+            'развлекательный': 'Развлекательные',
+            'entertainment': 'Развлекательные',
+            'познавательный': 'Познавательные',
+            'образовательный': 'Познавательные',
+            'documentary': 'Познавательные'
+        }
+
+        channel_lower = channel_name.lower()
+        for keyword, category in keywords.items():
+            if keyword in channel_lower:
                 return category
 
         return "Общие"
+
+    def get_channel_category(self, channel_name):
+        """Определяет категорию для канала из cartolog.txt"""
+        return self.get_channel_category_improved(channel_name)
 
     def make_request(self, url, method='GET', max_retries=None):
         """HTTP запрос с повторными попытками"""
@@ -584,46 +619,248 @@ class OnlineM3UScanner:
 
         return search_urls
 
+    def exact_match(self, channel_title, search_patterns):
+        """Поиск канала по части названия"""
+        channel_title = channel_title.lower().strip()
+        channel_title = re.sub(r'[^\w\s]', ' ', channel_title)
+        channel_title = re.sub(r'\s+', ' ', channel_title).strip()
+
+        search_name = search_patterns[0].lower().strip() if search_patterns else ""
+
+        # Если ищем по одному слову, ищем частичное совпадение
+        if len(search_name.split()) == 1:
+            # Ищем слово целиком
+            if re.search(r'\b' + re.escape(search_name) + r'\b', channel_title):
+                return True
+            # Ищем слово в составе других слов
+            if search_name in channel_title:
+                return True
+
+        # Для многословных запросов проверяем точнее
+        for pattern in search_patterns:
+            pattern = pattern.lower().strip()
+
+            # Точное совпадение
+            if channel_title == pattern:
+                return True
+
+            # Все слова запроса должны быть в названии канала
+            if all(word in channel_title for word in pattern.split()):
+                return True
+
+            # Нечеткое сравнение
+            if self.fuzzy_match(channel_title, pattern):
+                return True
+
+        return False
+
+    def generate_exact_search_patterns(self, channel_name):
+        """Генерирует паттерны для поиска (расширенный поиск)"""
+        name_lower = channel_name.lower().strip()
+
+        # Разбиваем на слова
+        words = name_lower.split()
+        patterns = []
+
+        # Добавляем полное название
+        patterns.append(name_lower)
+
+        # Если название состоит из одного слова
+        if len(words) == 1:
+            single_word = words[0]
+
+            # Разные варианты одного слова
+            patterns.extend([
+                single_word,
+                single_word + ' hd',
+                single_word + ' fhd',
+                single_word + ' 1080p',
+                single_word + ' 720p',
+                single_word.replace(' ', ''),
+                single_word.replace(' ', '.'),
+                single_word.replace(' ', '-'),
+                single_word.replace('тв', 'tv'),
+                single_word.replace('tv', 'тв'),
+                single_word + ' tv',
+                single_word + ' тв',
+                single_word + ' канал',
+                single_word + ' channel',
+                'канал ' + single_word,
+                'channel ' + single_word,
+                ])
+
+            # Для русских каналов
+            if any(cyr in single_word for cyr in 'абвгдеёжзийклмнопрстуфхцчшщъыьэюя'):
+                patterns.extend([
+                    single_word + ' 1',
+                    single_word + ' 2',
+                    single_word + ' 24',
+                    single_word + ' news',
+                    single_word + ' новости',
+                    ])
+
+        # Для многословных названий
+        else:
+            patterns.extend([
+                ' '.join(words),
+                '.'.join(words),
+                '-'.join(words),
+                ''.join(words),
+                words[0],  # Первое слово
+                words[-1],  # Последнее слово
+            ])
+
+            # Добавляем варианты с качествами
+            for quality in ['hd', 'fhd', '1080p', '720p', '4k']:
+                patterns.append(name_lower + ' ' + quality)
+                patterns.append(' '.join(words) + ' ' + quality)
+
+            # Добавляем варианты с цифрами
+            for i in range(1, 10):
+                patterns.append(name_lower + ' ' + str(i))
+                patterns.append(' '.join(words) + ' ' + str(i))
+
+        # Убираем дубликаты и пустые строки
+        unique_patterns = []
+        for p in patterns:
+            if p and len(p) > 1 and p not in unique_patterns:
+                unique_patterns.append(p)
+
+        return unique_patterns[:30]  # Ограничиваем количество
+
+    def search_with_keywords(self, channel_name):
+        """Поиск канала с использованием ключевых слов"""
+        print(f"🔍 Расширенный поиск: '{channel_name}'")
+
+        # Основные ключевые слова для поиска
+        keywords = []
+        name_lower = channel_name.lower().strip()
+        words = name_lower.split()
+
+        # Добавляем основные слова
+        keywords.extend(words)
+
+        # Добавляем варианты транслитерации
+        if len(words) == 1:
+            word = words[0]
+            # Русско-английские варианты
+            trans_dict = {
+                'россия': ['russia', 'rossiya', 'rossia'],
+                'ртр': ['rtr'],
+                'нтв': ['ntv'],
+                'тнт': ['tnt'],
+                'стс': ['sts', 'ctc'],
+                'первый': ['perviy', 'first', '1tv'],
+                'второй': ['vtoroy', 'second'],
+                'новости': ['news', 'novosti'],
+                'спорт': ['sport'],
+                'кино': ['kino', 'cinema'],
+                'музыка': ['music', 'muzyka'],
+                'детский': ['kids', 'detskiy'],
+            }
+
+            if word in trans_dict:
+                keywords.extend(trans_dict[word])
+
+        # Убираем дубликаты
+        keywords = list(set(keywords))
+
+        all_streams = []
+
+        for keyword in keywords[:10]:  # Ограничиваем количество ключевых слов
+            if len(keyword) < 2:  # Пропускаем слишком короткие слова
+                continue
+
+            print(f"   🔎 Поиск по ключевому слову: '{keyword}'")
+
+            # Ищем потоки по ключевому слову
+            streams = self.search_in_online_sources(keyword)
+
+            # Фильтруем потоки, где ключевое слово действительно в названии
+            filtered_streams = []
+            for stream in streams:
+                if 'name' in stream:
+                    stream_name = stream['name'].lower()
+                    if keyword in stream_name:
+                        # Заменяем имя на оригинальное название канала
+                        stream['name'] = channel_name
+                        filtered_streams.append(stream)
+
+            all_streams.extend(filtered_streams)
+
+            if filtered_streams:
+                print(f"      ✅ Найдено {len(filtered_streams)} потоков")
+
+        return all_streams
+
     def search_in_online_sources(self, channel_name):
         """Основной поиск канала по всем источникам из site.txt"""
         print(f"🌐 Поиск канала: '{channel_name}'")
+        print(f"   🔍 Режим: Расширенный поиск (все каналы с '{channel_name}')")
+
         all_streams = []
 
-        # 1. Поиск в IPTV источниках
-        print("   🔍 Этап 1: IPTV источники...")
-        iptv_streams = self.search_iptv_sources(channel_name)
-        all_streams.extend(iptv_streams)
-        print(f"      ✅ Найдено {len(iptv_streams)} IPTV потоков")
+        # 1. Точный поиск по полному названию
+        print("   🔍 Этап 1: Точный поиск...")
+        exact_streams = []
+        try:
+            exact_streams = self.search_iptv_sources(channel_name)
+        except:
+            pass
 
-        # 2. Поиск в поисковых системах
-        print("   🔎 Этап 2: Поисковые системы...")
-        search_urls = self.search_on_search_engines(channel_name)
+        # Переименовываем найденные потоки
+        for stream in exact_streams:
+            stream['name'] = channel_name
+
+        all_streams.extend(exact_streams)
+        print(f"      ✅ Найдено {len(exact_streams)} точных совпадений")
+
+        # 2. Поиск по ключевым словам (расширенный)
+        print("   🔎 Этап 2: Расширенный поиск...")
+
+        # Разбиваем название на ключевые слова
+        keywords = channel_name.lower().split()
+
+        for keyword in keywords:
+            if len(keyword) >= 3:  # Ищем только значимые слова
+                try:
+                    keyword_streams = self.search_iptv_sources(keyword)
+                    for stream in keyword_streams:
+                        # Проверяем, содержит ли название канала ключевое слово
+                        stream_name = stream.get('name', '').lower()
+                        if keyword in stream_name:
+                            # Заменяем имя на оригинальное название
+                            stream['name'] = channel_name
+                            all_streams.append(stream)
+                    if keyword_streams:
+                        print(f"      ✅ По '{keyword}': найдено {len(keyword_streams)}")
+                except:
+                    continue
+
+        # 3. Поиск в поисковых системах
+        print("   🔎 Этап 3: Поисковые системы...")
+        search_urls = []
+        for keyword in keywords[:2]:  # Используем 2 основных ключевых слова
+            if len(keyword) >= 3:
+                urls = self.search_on_search_engines(keyword)
+                search_urls.extend(urls)
+
         search_streams = self.quick_check_urls(search_urls, channel_name)
         all_streams.extend(search_streams)
         print(f"      ✅ Найдено {len(search_streams)} потоков с поисковиков")
 
-        # 3. Поиск на остальных сайтах
-        print("   🌐 Этап 3: Общие сайты...")
-        other_sites = [
-            site for site in self.custom_sites
-            if not any(keyword in site.lower() for keyword in [
-                'iptv', 'm3u', 'github.com/iptv', 'yandex.ru', 'google.com'
-            ])
-        ][:10]  # Ограничиваем количество
+        # Удаляем дубликаты по URL
+        unique_streams = []
+        seen_urls = set()
+        for stream in all_streams:
+            url = stream.get('url', '')
+            if url and url not in seen_urls:
+                unique_streams.append(stream)
+                seen_urls.add(url)
 
-        for site in other_sites:
-            try:
-                m3u_urls = self.scan_site_for_m3u(site, channel_name)
-                valid_streams = self.quick_check_urls(m3u_urls, channel_name)
-                all_streams.extend(valid_streams)
-                if valid_streams:
-                    print(f"      ✅ Найдено на {self.get_source_name(site)}")
-                time.sleep(1)
-            except:
-                continue
+        print(f"   📊 ИТОГО: {len(unique_streams)} уникальных потоков")
 
-        print(f"   📊 ИТОГО: {len(all_streams)} потенциальных потоков")
-        return all_streams
+        return unique_streams[:50]  # Ограничиваем количество
 
     def get_source_name(self, url):
         """Получает читаемое имя источника"""
@@ -802,22 +1039,6 @@ class OnlineM3UScanner:
         streams.sort(key=lambda x: (x.get('stability_score', 0), x.get('quality_score', 0)), reverse=True)
         return streams[:10]
 
-    def exact_match(self, channel_title, search_patterns):
-        """Точное совпадение канала"""
-        channel_title = channel_title.lower().strip()
-        channel_title = re.sub(r'[^\w\s]', ' ', channel_title)
-        channel_title = re.sub(r'\s+', ' ', channel_title).strip()
-
-        for pattern in search_patterns:
-            pattern = pattern.lower().strip()
-            if channel_title == pattern:
-                return True
-            if re.search(r'\b' + re.escape(pattern) + r'\b', channel_title):
-                return True
-            if self.fuzzy_match(channel_title, pattern):
-                return True
-        return False
-
     def fuzzy_match(self, text, pattern):
         """Нечеткое сравнение"""
         text = text.lower()
@@ -837,36 +1058,6 @@ class OnlineM3UScanner:
             if var in text and len(var) > 2:
                 return True
         return False
-
-    def generate_exact_search_patterns(self, channel_name):
-        """Генерирует паттерны для поиска"""
-        name_lower = channel_name.lower().strip()
-        patterns = [
-            name_lower,
-            name_lower + ' hd',
-            name_lower + ' fhd',
-            name_lower + ' 1080p',
-            name_lower + ' 720p',
-            name_lower.replace(' ', ''),
-            name_lower.replace(' ', '.'),
-            name_lower.replace(' ', '-'),
-            name_lower.replace('тв', 'tv'),
-            name_lower.replace('tv', 'тв'),
-            name_lower + ' tv',
-            name_lower + ' тв',
-            ]
-
-        # Убираем "канал" и "channel"
-        if 'канал' in name_lower:
-            without_channel = name_lower.replace('канал', '').strip()
-            if without_channel:
-                patterns.append(without_channel)
-        if 'channel' in name_lower:
-            without_channel = name_lower.replace('channel', '').strip()
-            if without_channel:
-                patterns.append(without_channel)
-
-        return list(set([p for p in patterns if p and len(p) > 1]))
 
     def is_high_quality_channel(self, channel_info):
         """Проверяет качество канала"""
@@ -1053,73 +1244,96 @@ class OnlineM3UScanner:
                 'quality_score': 0
             }
 
-    def check_streams(self, streams):
-        """Проверяет все найденные ссылки с анализом качества"""
+    def check_streams(self, streams, search_name):
+        """Проверяет все найденные ссылки"""
         if not streams:
             return []
 
         print(f"🔧 Проверка {len(streams)} найденных ссылок...")
+        print(f"   🎯 Фильтрация по: '{search_name}'")
+
         working_streams = []
+        search_lower = search_name.lower()
 
-        # Сортируем по стабильности и качеству
-        sorted_streams = sorted(streams, key=lambda x: (
-            x.get('stability_score', 0),
-            x.get('quality_score', 0)
-        ), reverse=True)
+        # Разбиваем поисковый запрос на слова
+        search_words = search_lower.split()
 
-        for i, stream in enumerate(sorted_streams, 1):
+        for i, stream in enumerate(streams, 1):
+            # Проверяем, содержит ли название канала поисковые слова
+            stream_name = stream.get('name', '').lower()
+            stream_title = stream.get('original_name', stream_name)
+
+            # Проверка на релевантность
+            is_relevant = False
+
+            if len(search_words) == 1:
+                # Для одного слова - частичное совпадение
+                word = search_words[0]
+                if word in stream_title or re.search(r'\b' + re.escape(word) + r'\b', stream_title):
+                    is_relevant = True
+            else:
+                # Для нескольких слов - проверяем все слова
+                if all(word in stream_title for word in search_words):
+                    is_relevant = True
+
+            if not is_relevant:
+                print(f"  [{i}/{len(streams)}] ⏭️  Пропуск: '{stream_title}' не соответствует '{search_name}'")
+                continue
+
+            # Проверяем работоспособность
             result = self.check_single_stream_improved(stream)
             if result:
                 if result['working']:
                     working_streams.append(result)
-
-                    # Определяем иконки для отображения
                     stability_icon = '🟢' if result.get('stable') else '🟡'
-
-                    quality_score = result.get('quality_score', 0)
-                    if quality_score >= 70:
-                        quality_icon = '🟢'
-                        quality_text = 'ВЫСОКОЕ'
-                    elif quality_score >= 50:
-                        quality_icon = '🟡'
-                        quality_text = 'СРЕДНЕЕ'
-                    elif quality_score >= 30:
-                        quality_icon = '🟠'
-                        quality_text = 'НИЗКОЕ'
-                    else:
-                        quality_icon = '🔴'
-                        quality_text = 'ОЧЕНЬ НИЗКОЕ'
-
-                    # Добавляем информацию о качестве в вывод
-                    quality_info = ""
-                    if result.get('video_info'):
-                        video_info = result['video_info']
-                        if video_info.get('resolution'):
-                            quality_info = f" [{video_info['resolution']}]"
-                        elif video_info.get('bitrate'):
-                            quality_info = f" [{video_info['bitrate']}kbps]"
-
-                    print(f"  [{i}/{len(streams)}] ✅ {quality_icon}{stability_icon} РАБОТАЕТ ({quality_text}{quality_info}) - {result['status']}")
+                    quality_icon = '🟢' if result.get('quality') == 'high' else '🟡' if result.get('quality') == 'medium' else '🔴'
+                    print(f"  [{i}/{len(streams)}] ✅ {quality_icon}{stability_icon} РАБОТАЕТ - {result['status']}")
                 else:
                     print(f"  [{i}/{len(streams)}] ❌ Не работает - {result['status']}")
 
             if i < len(streams):
                 time.sleep(1)
 
-        # Фильтруем по качеству и стабильности
+        # Сортируем по релевантности и качеству
         if working_streams:
-            # Сортируем по качеству
-            working_streams.sort(key=lambda x: (
-                x.get('quality_score', 0),
-                x.get('stable', False)
-            ), reverse=True)
+            def relevance_score(stream):
+                name = stream.get('name', '').lower()
+                score = 0
 
-            # Возвращаем только лучшие потоки
-            high_quality = [s for s in working_streams if s.get('quality_score', 0) >= 50]
-            if high_quality:
-                return high_quality[:5]
-            else:
-                return working_streams[:3]
+                # Точное совпадение дает максимальный балл
+                if name == search_lower:
+                    score += 100
+
+                # Проверяем каждое слово
+                for word in search_words:
+                    if re.search(r'\b' + re.escape(word) + r'\b', name):
+                        score += 50
+                    elif word in name:
+                        score += 30
+
+                # Добавляем качество
+                score += stream.get('quality_score', 0) / 10
+
+                return score
+
+            working_streams.sort(key=relevance_score, reverse=True)
+
+            # Группируем по типам каналов
+            grouped_streams = {}
+            for stream in working_streams:
+                name = stream.get('name', '')
+                if name not in grouped_streams:
+                    grouped_streams[name] = []
+                grouped_streams[name].append(stream)
+
+            # Берем лучшие из каждой группы
+            final_streams = []
+            for name, streams in grouped_streams.items():
+                # Сортируем внутри группы по качеству
+                streams.sort(key=lambda x: x.get('quality_score', 0), reverse=True)
+                final_streams.extend(streams[:2])  # Берем 2 лучших из каждой группы
+
+            return final_streams[:10]  # Ограничиваем общее количество
 
         return []
 
@@ -1132,17 +1346,28 @@ class OnlineM3UScanner:
         # Загружаем существующие каналы
         existing_channels = self.load_existing_channels()
 
-        # Ищем существующий канал
+        # Ищем существующий канал и сохраняем его оригинальные данные
         final_channel_name = channel_name
         old_streams = []
+        original_group = None
+        original_tvg_id = None
+        original_tvg_logo = None
 
         for existing_name in existing_channels.keys():
             if existing_name.lower() == channel_name.lower():
                 final_channel_name = existing_name
                 old_streams = existing_channels[final_channel_name].copy()
+                # Сохраняем оригинальные данные из первого стрима
+                if old_streams:
+                    original_group = old_streams[0].get('group', None)
+                    original_tvg_id = old_streams[0].get('tvg_id', '')
+                    original_tvg_logo = old_streams[0].get('tvg_logo', '')
                 break
 
-        category = self.get_channel_category(final_channel_name)
+        # Если не нашли оригинальный group-title, определяем из cartolog.txt
+        if not original_group:
+            original_group = self.get_channel_category(final_channel_name)
+            print(f"   ℹ️  Категория из cartolog.txt: '{original_group}'")
 
         # Поиск новых ссылок
         start_time = time.time()
@@ -1156,15 +1381,20 @@ class OnlineM3UScanner:
             return False
 
         # Проверка работоспособности с анализом качества
-        working_streams = self.check_streams(all_streams)
+        working_streams = self.check_streams(all_streams, final_channel_name)
         search_time = time.time() - start_time
 
         if working_streams:
-            # Добавляем категорию и информацию о качестве
+            # Применяем оригинальный group-title и другие данные ко всем стримам
             for stream in working_streams:
-                stream['group'] = category
+                stream['group'] = original_group
+                # Восстанавливаем оригинальные данные если они были
+                if original_tvg_id:
+                    stream['tvg_id'] = original_tvg_id
+                if original_tvg_logo:
+                    stream['tvg_logo'] = original_tvg_logo
 
-                # Добавляем дополнительную информацию о качестве в группу
+                # Добавляем дополнительную информацию о качестве в group
                 quality_info = ""
                 if stream.get('video_info'):
                     vi = stream['video_info']
@@ -1174,25 +1404,15 @@ class OnlineM3UScanner:
                             quality_info += f" {vi['bitrate']}kbps"
                         quality_info += "]"
 
-                if quality_info:
-                    stream['group'] = f"{category}{quality_info}"
+                if quality_info and original_group:
+                    stream['group'] = f"{original_group}{quality_info}"
 
             # Объединяем старые и новые ссылки
             combined_streams = self.merge_streams(old_streams, working_streams)
 
             print("\n🎉" + "=" * 60)
             print(f"✅ НАЙДЕНО РАБОЧИХ ССЫЛОК: {len(working_streams)}")
-            print(f"🎯 СТАБИЛЬНЫХ ПОТОКОВ: {len([s for s in working_streams if s.get('stable')])}")
-
-            # Статистика качества
-            quality_stats = {
-                'high': len([s for s in working_streams if s.get('quality_score', 0) >= 70]),
-                'medium': len([s for s in working_streams if 50 <= s.get('quality_score', 0) < 70]),
-                'low': len([s for s in working_streams if s.get('quality_score', 0) < 50])
-            }
-
-            print(f"📈 КАЧЕСТВО: 🟢{quality_stats['high']} 🟡{quality_stats['medium']} 🟠{quality_stats['low']}")
-            print(f"📂 Категория: {category}")
+            print(f"🎯 Группа: {original_group}")
             print(f"⏱️  Время поиска: {search_time:.1f} секунд")
             print("=" * 60)
 
@@ -1202,18 +1422,7 @@ class OnlineM3UScanner:
             if success:
                 print(f"\n🔄 КАНАЛ ОБНОВЛЕН: {final_channel_name}")
                 print(f"📺 Всего ссылок: {len(combined_streams)}")
-
-                # Выводим информацию о лучшем потоке
-                if combined_streams:
-                    best_stream = max(combined_streams, key=lambda x: x.get('quality_score', 0))
-                    quality_score = best_stream.get('quality_score', 0)
-                    print(f"🏆 Лучшее качество: {quality_score}/100")
-
-                    if best_stream.get('video_info'):
-                        vi = best_stream['video_info']
-                        print(f"   📏 Разрешение: {vi.get('resolution', 'N/A')}")
-                        print(f"   📊 Битрейт: {vi.get('bitrate', 'N/A')}kbps")
-                        print(f"   🎬 Кодек: {vi.get('video_codec', 'N/A')}")
+                print(f"📂 Группа: {original_group}")
             return True
 
         else:
@@ -1230,15 +1439,23 @@ class OnlineM3UScanner:
         merged = []
         seen_urls = set()
 
+        # Сохраняем оригинальный group из старых стримов (если есть)
+        original_group = None
+        if old_streams:
+            original_group = old_streams[0].get('group', None)
+
         # Сначала новые с высоким качеством
         for stream in new_streams:
             if (stream['url'] not in seen_urls and
                     stream.get('working', True) and
                     stream.get('quality_score', 0) >= 50):
+                # Если есть оригинальный group, используем его
+                if original_group and not stream.get('group'):
+                    stream['group'] = original_group
                 merged.append(stream)
                 seen_urls.add(stream['url'])
 
-        # Затем старые стабильные
+        # Затем старые стабильные (сохраняем оригинальные группы)
         for stream in old_streams:
             if (stream['url'] not in seen_urls and
                     stream.get('working', True) and
@@ -1249,6 +1466,9 @@ class OnlineM3UScanner:
         # Затем остальные новые
         for stream in new_streams:
             if stream['url'] not in seen_urls and stream.get('working', True):
+                # Если есть оригинальный group, используем его
+                if original_group and not stream.get('group'):
+                    stream['group'] = original_group
                 merged.append(stream)
                 seen_urls.add(stream['url'])
 
@@ -1404,24 +1624,30 @@ https://edge1.1internet.tv/
             print(f"{'='*60}")
 
             try:
-                # Сохраняем оригинальную информацию
+                # Сохраняем ВСЮ оригинальную информацию
                 original_name = channel_name
-                original_category = "Общие"
+                original_group = None
                 original_tvg_id = ""
                 original_tvg_logo = ""
 
                 if existing_channels[channel_name]:
-                    original_category = existing_channels[channel_name][0].get('group', 'Общие')
-                    original_tvg_id = existing_channels[channel_name][0].get('tvg_id', '')
-                    original_tvg_logo = existing_channels[channel_name][0].get('tvg_logo', '')
+                    first_stream = existing_channels[channel_name][0]
+                    original_group = first_stream.get('group', None)
+                    original_tvg_id = first_stream.get('tvg_id', '')
+                    original_tvg_logo = first_stream.get('tvg_logo', '')
+
+                # Если нет оригинальной группы, определяем из cartolog.txt
+                if not original_group:
+                    original_group = self.get_channel_category(channel_name)
+                    print(f"   ℹ️  Категория из cartolog.txt: '{original_group}'")
 
                 working_streams = self.search_channel_online(channel_name)
 
                 if working_streams:
-                    # Восстанавливаем оригинальную информацию
+                    # Восстанавливаем ВСЮ оригинальную информацию
                     for stream in working_streams:
                         stream['name'] = original_name
-                        stream['group'] = original_category
+                        stream['group'] = original_group  # Важно: сохраняем оригинальную группу
                         if original_tvg_id:
                             stream['tvg_id'] = original_tvg_id
                         if original_tvg_logo:
@@ -1429,7 +1655,7 @@ https://edge1.1internet.tv/
 
                     existing_channels[channel_name] = working_streams
                     updated_count += 1
-                    print(f"✅ ОБНОВЛЕН: {original_name}")
+                    print(f"✅ ОБНОВЛЕН: {original_name} (группа: {original_group})")
                 else:
                     del existing_channels[channel_name]
                     failed_count += 1
@@ -1450,6 +1676,11 @@ https://edge1.1internet.tv/
     def search_channel_online(self, channel_name):
         """Поиск канала"""
         print(f"🎯 Поиск: '{channel_name}'")
+
+        # Определяем группу из cartolog.txt
+        group = self.get_channel_category(channel_name)
+        print(f"   📂 Группа из cartolog.txt: '{group}'")
+
         all_streams = self.search_in_online_sources(channel_name)
 
         unique_streams = []
@@ -1457,6 +1688,7 @@ https://edge1.1internet.tv/
         for stream in all_streams:
             if stream['url'] not in seen_urls:
                 stream['name'] = channel_name
+                stream['group'] = group  # Устанавливаем группу из cartolog.txt
                 unique_streams.append(stream)
                 seen_urls.add(stream['url'])
 
@@ -1464,9 +1696,12 @@ https://edge1.1internet.tv/
         if not unique_streams:
             return []
 
-        working_streams = self.check_streams(unique_streams)
+        working_streams = self.check_streams(unique_streams, channel_name)
         for stream in working_streams:
             stream['name'] = channel_name
+            # Если группа не установлена, устанавливаем из cartolog.txt
+            if not stream.get('group'):
+                stream['group'] = group
 
         return working_streams
 
