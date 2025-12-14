@@ -31,3 +31,6 @@ playlist/
 M3UScanner.py 
 requirements.txt
 
+
+<img width="275" height="481" alt="image" src="https://github.com/user-attachments/assets/0354a138-f040-4229-9a37-f49bc81871c0" />
+
