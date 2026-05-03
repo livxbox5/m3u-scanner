@@ -14,5 +14,5 @@
 #========================================================
 # 📡 КАНАЛЫ — обновляются автоматически
 #========================================================
-#EXTINF:-1 group-title="IPTV" tvg-name="СТС (1080p)",СТС (1080p)
+#EXTINF:-1 group-title="IPTV" tvg-name="Первый канал (720p)",Первый канал (720p)
 http://gjirafa-video-live.gjirafa.net/gjvideo-live/0nj-g63-92x-few/tracks-v2a1/mono.m3u8
