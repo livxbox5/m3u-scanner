@@ -1,1929 +1,815 @@
-import urllib.request
-import urllib.error
-import re
-import time
-import sys
-import os
-import ssl
-import json
-from urllib.parse import urlparse, urljoin, quote
-import concurrent.futures
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import subprocess
+# M3UScanner.py — Главный файл запуска
+# py M3UScanner.py          — консольный режим (по умолчанию)
+# py M3UScanner.py --gui    — графический интерфейс
+# py M3UScanner.py --console — консольный режим (явно)
 
-# Отключаем SSL проверку
-ssl._create_default_https_context = ssl._create_unverified_context
+import os
+import sys
+import time
+import re
+from pathlib import Path
+from urllib.parse import urljoin
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# Добавляем текущую директорию в путь для импортов
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from M3UUtils import M3UParser, QualityAnalyzer
+from SearchM3U import NetworkSearcher, PatternMatcher
+
 
 class OnlineM3UScanner:
+    """Основной класс сканера M3U"""
+
     def __init__(self):
+        # Настройки
         self.timeout = 15
         self.playlist_file = "playlist/playlist.m3u"
         self.sites_file = "files/site.txt"
         self.cartolog_file = "files/cartolog.txt"
         self.channels_file = "files/Channels.txt"
-        self.max_workers = 3
+        self.max_workers = 10
         self.max_sites_per_search = 20
         self.max_retries = 3
+        self.max_check_urls = 50
+        self.search_mode = "exact"
 
-        # Настройки расширенной проверки качества
-        self.enable_deep_check = True  # Включить глубокую проверку
-        self.check_duration = 5  # Проверять 5 секунд потока
-        self.required_bitrate = 500  # Минимальный битрейт (kbps)
-        self.min_video_resolution = 480  # Минимальное разрешение (pixels)
-        self.required_fps = 25  # Минимальный FPS
-        self.check_timeout = 30  # Таймаут проверки
+        # Настройки форматов (по умолчанию оба)
+        self.scan_m3u = True
+        self.scan_m3u8 = True
 
-        # Настройки анализа качества
-        self.quality_weights = {
-            'resolution': 0.4,
-            'bitrate': 0.3,
-            'codec': 0.15,
-            'fps': 0.15
-        }
-
-        # Кэш результатов проверки
-        self.quality_cache = {}
-        self.ffmpeg_path = None
-
-        # Автоматически добавляем ffmpeg в PATH
-        self.setup_ffmpeg_path()
-
-        # Загружаем данные из файлов
-        self.custom_sites = self.load_custom_sites()
-        self.channel_categories = self.load_channel_categories()
-        self.channels_list = self.load_channels_list()
-
-        # Кэш для хранения найденных каналов
-        self.channels_cache = {}
-
-        # Статистика
+        # Статистика (создаём ДО передачи в другие классы)
         self.stats = {
             'total_requests': 0,
             'successful_requests': 0,
             'failed_requests': 0,
             'avg_response_time': 0,
             'quality_checks': 0,
-            'failed_quality_checks': 0
+            'failed_quality_checks': 0,
+            'm3u_found': 0,
+            'm3u8_found': 0
         }
 
-    def setup_ffmpeg_path(self):
-        """Автоматически добавляет ffmpeg в PATH если он есть в папке проекта"""
-        ffmpeg_paths = [
-            os.path.join(os.path.dirname(__file__), 'ffmpeg', 'bin'),
-            os.path.join(os.path.dirname(__file__), 'ffmpeg-2025-11-17-git-e94439e49b-full_build', 'bin'),
-        ]
+        # Утилиты
+        self.network_searcher = NetworkSearcher(
+            timeout=self.timeout,
+            max_retries=self.max_retries,
+            stats=self.stats
+        )
 
-        for path in ffmpeg_paths:
-            if os.path.exists(path):
-                os.environ['PATH'] = path + os.pathsep + os.environ['PATH']
-                self.ffmpeg_path = self.find_ffmpeg()
-                print(f"✅ FFmpeg добавлен в PATH: {path}")
-                return
-        print("ℹ️  FFmpeg не найден в папке проекта")
+        self.quality_analyzer = QualityAnalyzer(
+            enable_deep_check=True,
+            check_duration=5,
+            required_bitrate=500,
+            min_resolution=480,
+            required_fps=25,
+            check_timeout=30
+        )
 
-    def find_ffmpeg(self):
-        """Автоматически ищет ffmpeg в различных местах"""
-        possible_paths = [
-            "./ffmpeg/bin/ffmpeg.exe",
-            "./ffmpeg-2025-11-17-git-e94439e49b-full_build/bin/ffmpeg.exe",
-            "./ffmpeg.exe",
-            "ffmpeg"
-        ]
+        self.pattern_matcher = PatternMatcher()
+        self.m3u_parser = M3UParser()
 
-        for path in possible_paths:
-            try:
-                result = subprocess.run([path, '-version'], capture_output=True, timeout=5)
-                if result.returncode == 0:
-                    print(f"✅ FFmpeg найден: {path}")
-                    return path
-            except:
-                continue
-        print("❌ FFmpeg не найден")
-        return None
+        # Загрузка файлов
+        self.custom_sites = self.load_custom_sites()
+        self.channel_categories = self.load_channel_categories()
+        self.channels_list = self.load_channels_list()
 
-    def load_custom_sites(self):
-        """Загружает список сайтов из files/site.txt"""
-        sites = []
-        if os.path.exists(self.sites_file):
-            try:
-                with open(self.sites_file, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        site = line.strip()
-                        if site and not site.startswith('#'):
-                            sites.append(site)
-                print(f"📁 Загружено {len(sites)} сайтов из {self.sites_file}")
-            except Exception as e:
-                print(f"❌ Ошибка загрузки сайтов: {e}")
+        # Кэш
+        self.channels_cache = {}
+
+    # ============================================================
+    # Настройки форматов
+    # ============================================================
+    def set_scan_formats(self, m3u: bool, m3u8: bool):
+        """Установить форматы для сканирования"""
+        self.scan_m3u = m3u
+        self.scan_m3u8 = m3u8
+
+    def get_format_string(self) -> str:
+        """Получить строку с выбранными форматами"""
+        formats = []
+        if self.scan_m3u:
+            formats.append("M3U")
+        if self.scan_m3u8:
+            formats.append("M3U8")
+        return ", ".join(formats) if formats else "НЕ ВЫБРАНЫ"
+    def set_search_mode(self, mode: str):
+        """Установить режим поиска: exact / broad"""
+        self.search_mode = mode
+        if mode == "broad":
+            print("🔍 Режим: расширенный (поиск всех дублей канала)")
         else:
-            print(f"❌ Файл {self.sites_file} не найден!")
-            self.create_default_sites_file()
-        return sites
+            print("🔍 Режим: точный (только указанный канал)")
+
+    # ============================================================
+    # Загрузка конфигурационных файлов
+    # ============================================================
+    def load_custom_sites(self):
+        """Загрузка списка сайтов из files/site.txt"""
+        try:
+            if not os.path.exists(self.sites_file):
+                print(f"⚠️ Файл {self.sites_file} не найден.")
+                os.makedirs(os.path.dirname(self.sites_file), exist_ok=True)
+                return []
+            with open(self.sites_file, 'r', encoding='utf-8') as f:
+                return [line.strip() for line in f if line.strip() and not line.startswith('#')]
+        except Exception as e:
+            print(f"❌ Ошибка загрузки site.txt: {e}")
+            return []
 
     def load_channels_list(self):
-        """Загружает список каналов из files/Channels.txt"""
-        channels = []
-        if os.path.exists(self.channels_file):
-            try:
-                with open(self.channels_file, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        channel = line.strip()
-                        if channel and not channel.startswith('#'):
-                            channels.append(channel)
-                print(f"📁 Загружено {len(channels)} каналов из {self.channels_file}")
-            except Exception as e:
-                print(f"❌ Ошибка загрузки каналов: {e}")
-        else:
-            print(f"❌ Файл {self.channels_file} не найден!")
-        return channels
-
-    def create_default_sites_file(self):
-        """Создает файл с сайтами по умолчанию"""
-        default_sites = [
-            "# IPTV источники",
-            "https://github.com/iptv-org/iptv",
-            "https://raw.githubusercontent.com/iptv-org/iptv/master/streams/ru.m3u",
-            "https://raw.githubusercontent.com/iptv-org/iptv/master/categories/",
-            "",
-            "# Поисковые системы",
-            "https://yandex.ru/",
-            "https://google.com/",
-            "",
-            "# Видео платформы",
-            "https://youtube.com/",
-            "https://rutube.ru/",
-            "",
-            "# Социальные сети",
-            "https://vk.com/",
-            "https://ok.ru/",
-        ]
+        """Загрузка списка каналов из files/Channels.txt"""
         try:
-            os.makedirs(os.path.dirname(self.sites_file), exist_ok=True)
-            with open(self.sites_file, 'w', encoding='utf-8') as f:
-                f.write("# Список сайтов для поиска M3U плейлистов\n")
-                for site in default_sites:
-                    f.write(f"{site}\n")
-            print(f"✅ Создан файл {self.sites_file}")
+            if not os.path.exists(self.channels_file):
+                print(f"⚠️ Файл {self.channels_file} не найден.")
+                return []
+            with open(self.channels_file, 'r', encoding='utf-8') as f:
+                return [line.strip() for line in f if line.strip() and not line.startswith('#')]
         except Exception as e:
-            print(f"❌ Ошибка создания файла: {e}")
+            print(f"❌ Ошибка загрузки Channels.txt: {e}")
+            return []
 
     def load_channel_categories(self):
-        """Загружает категории каналов из files/cartolog.txt"""
-        categories = {}
-        if os.path.exists(self.cartolog_file):
-            try:
-                with open(self.cartolog_file, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        line = line.strip()
-                        if line and not line.startswith('#'):
-                            if ':' in line:
-                                channel, category = line.split(':', 1)
-                                categories[channel.strip()] = category.strip()
-                            else:
-                                categories[line] = line
-                print(f"📁 Загружено категорий: {len(categories)} из {self.cartolog_file}")
-            except Exception as e:
-                print(f"❌ Ошибка загрузки категорий: {e}")
-        else:
-            print(f"❌ Файл {self.cartolog_file} не найден!")
-        return categories
-
-    def get_channel_category_improved(self, channel_name):
-        """Улучшенное определение категории для канала из cartolog.txt"""
-        # Прямое совпадение
-        if channel_name in self.channel_categories:
-            return self.channel_categories[channel_name]
-
-        # Частичное совпадение
-        for channel_pattern, category in self.channel_categories.items():
-            # Если паттерн содержится в названии канала
-            if channel_pattern.lower() in channel_name.lower():
-                return category
-            # Если название канала содержится в паттерне
-            if channel_name.lower() in channel_pattern.lower():
-                return category
-
-        # Совпадение по ключевым словам
-        keywords = {
-            'новости': 'Новости',
-            'news': 'Новости',
-            'спорт': 'Спорт',
-            'sport': 'Спорт',
-            'кино': 'Кино',
-            'фильм': 'Кино',
-            'movie': 'Кино',
-            'музыка': 'Музыка',
-            'music': 'Музыка',
-            'детский': 'Детские',
-            'kids': 'Детские',
-            'развлекательный': 'Развлекательные',
-            'entertainment': 'Развлекательные',
-            'познавательный': 'Познавательные',
-            'образовательный': 'Познавательные',
-            'documentary': 'Познавательные'
-        }
-
-        channel_lower = channel_name.lower()
-        for keyword, category in keywords.items():
-            if keyword in channel_lower:
-                return category
-
-        return "Общие"
-
-    def get_channel_category(self, channel_name):
-        """Определяет категорию для канала из cartolog.txt"""
-        return self.get_channel_category_improved(channel_name)
-
-    def make_request(self, url, method='GET', max_retries=None):
-        """HTTP запрос с повторными попытками"""
-        if max_retries is None:
-            max_retries = self.max_retries
-
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': '*/*',
-            'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
-        }
-
-        for attempt in range(max_retries):
-            self.stats['total_requests'] += 1
-            start_time = time.time()
-
-            try:
-                if method.upper() == 'HEAD':
-                    req = urllib.request.Request(url, headers=headers, method='HEAD')
-                else:
-                    req = urllib.request.Request(url, headers=headers)
-
-                current_timeout = min(self.timeout * (attempt + 1), 30)
-                response = urllib.request.urlopen(req, timeout=current_timeout)
-                response_time = time.time() - start_time
-
-                self.stats['successful_requests'] += 1
-                self.stats['avg_response_time'] = (
-                                                          self.stats['avg_response_time'] * (self.stats['successful_requests'] - 1) + response_time
-                                                  ) / self.stats['successful_requests']
-
-                return response
-
-            except Exception as e:
-                if attempt == max_retries - 1:
-                    self.stats['failed_requests'] += 1
-                    return None
-                time.sleep(1)
-
-        return None
-
-    def analyze_stream_quality(self, url):
-        """Анализ качества видео потока с помощью FFmpeg"""
-        self.stats['quality_checks'] += 1
-
-        if not self.ffmpeg_path:
-            print("    ℹ️  FFmpeg не найден - пропускаем анализ качества")
-            return None
-
-        if url in self.quality_cache:
-            return self.quality_cache[url]
-
-        print(f"    📊 Анализ качества видео...")
-
+        """Загрузка категорий из files/cartolog.txt"""
         try:
-            # Команда для получения информации о потоке
-            cmd = [
-                self.ffmpeg_path,
-                '-i', url,
-                '-t', str(self.check_duration),  # Проверяем N секунд
-                '-f', 'null', '-',
-                '-hide_banner',
-                '-loglevel', 'info'
-            ]
-
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                timeout=self.check_timeout,
-                text=True,
-                errors='ignore'
-            )
-
-            output = result.stderr + result.stdout
-
-            # Парсим информацию о качестве
-            quality_info = self.parse_ffmpeg_output(output)
-
-            # Проверяем минимальные требования
-            if quality_info:
-                meets_requirements = self.check_quality_requirements(quality_info)
-                quality_info['meets_requirements'] = meets_requirements
-                quality_info['quality_score'] = self.calculate_quality_score(quality_info)
-
-                # Кэшируем результат
-                self.quality_cache[url] = quality_info
-
-                # Выводим информацию
-                self.print_quality_info(quality_info)
-
-                return quality_info
-            else:
-                print("    ❌ Не удалось проанализировать качество")
-                return None
-
-        except subprocess.TimeoutExpired:
-            print(f"    ⏰ Таймаут анализа качества")
-            self.stats['failed_quality_checks'] += 1
-            return None
+            if not os.path.exists(self.cartolog_file):
+                print(f"⚠️ Файл {self.cartolog_file} не найден.")
+                return {}
+            categories = {}
+            current_category = "Без категории"
+            with open(self.cartolog_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    if line.startswith('#'):
+                        current_category = line.lstrip('#').strip()
+                    else:
+                        categories[line] = current_category
+            return categories
         except Exception as e:
-            print(f"    ❌ Ошибка анализа: {str(e)[:50]}")
-            self.stats['failed_quality_checks'] += 1
-            return None
+            print(f"❌ Ошибка загрузки cartolog.txt: {e}")
+            return {}
 
-    def parse_ffmpeg_output(self, output):
-        """Парсит вывод FFmpeg для получения информации о качестве"""
-        quality_info = {
-            'resolution': None,
-            'bitrate': None,
-            'video_codec': None,
-            'audio_codec': None,
-            'fps': None,
-            'duration': None,
-            'streams': []
-        }
+    def get_channel_category(self, channel_name: str) -> str:
+        return self.channel_categories.get(channel_name, "Без категории")
 
-        # Ищем информацию о видео потоке
-        video_patterns = [
-            r'Stream.*Video:.*(\d+)x(\d+)',
-            r'Video:.*(\d+)x(\d+)',
-            r'(\d+)x(\d+).*Video:'
-        ]
-
-        for pattern in video_patterns:
-            match = re.search(pattern, output, re.IGNORECASE)
-            if match:
-                width = int(match.group(1))
-                height = int(match.group(2))
-                quality_info['resolution'] = f"{width}x{height}"
-                quality_info['resolution_width'] = width
-                quality_info['resolution_height'] = height
-                quality_info['pixels'] = width * height
-                break
-
-        # Ищем битрейт
-        bitrate_patterns = [
-            r'bitrate:\s*(\d+)\s*kb/s',
-            r'bitrate:\s*(\d+)\s*kbps',
-            r'bitrate\s*(\d+)\s*k',
-            r'(\d+)\s*kb/s'
-        ]
-
-        for pattern in bitrate_patterns:
-            match = re.search(pattern, output)
-            if match:
-                quality_info['bitrate'] = int(match.group(1))
-                break
-
-        # Ищем FPS
-        fps_patterns = [
-            r'(\d+(?:\.\d+)?)\s*fps',
-            r'fps:\s*(\d+(?:\.\d+)?)',
-            r'(\d+(?:\.\d+)?)\s*tbr'
-        ]
-
-        for pattern in fps_patterns:
-            match = re.search(pattern, output)
-            if match:
-                quality_info['fps'] = float(match.group(1))
-                break
-
-        # Ищем кодеки
-        codec_patterns = {
-            'video': r'Video:\s*([^\s,]+)',
-            'audio': r'Audio:\s*([^\s,]+)'
-        }
-
-        for stream_type, pattern in codec_patterns.items():
-            match = re.search(pattern, output, re.IGNORECASE)
-            if match:
-                quality_info[f'{stream_type}_codec'] = match.group(1)
-
-        # Ищем длительность
-        duration_pattern = r'Duration:\s*(\d{2}):(\d{2}):(\d{2})\.\d+'
-        match = re.search(duration_pattern, output)
-        if match:
-            hours, minutes, seconds = map(int, match.groups())
-            quality_info['duration_seconds'] = hours * 3600 + minutes * 60 + seconds
-
-        return quality_info if quality_info['resolution'] else None
-
-    def check_quality_requirements(self, quality_info):
-        """Проверяет, соответствует ли поток минимальным требованиям"""
-        requirements_met = True
-
-        # Проверка разрешения
-        if 'pixels' in quality_info:
-            if quality_info['pixels'] < self.min_video_resolution * 854:  # Пример: 480p = 480*854
-                print(f"    ⚠️  Низкое разрешение: {quality_info.get('resolution', 'N/A')}")
-                requirements_met = False
-
-        # Проверка битрейта
-        if quality_info.get('bitrate'):
-            if quality_info['bitrate'] < self.required_bitrate:
-                print(f"    ⚠️  Низкий битрейт: {quality_info['bitrate']}kbps")
-                requirements_met = False
-
-        # Проверка FPS
-        if quality_info.get('fps'):
-            if quality_info['fps'] < self.required_fps:
-                print(f"    ⚠️  Низкий FPS: {quality_info['fps']}")
-                requirements_met = False
-
-        return requirements_met
-
-    def calculate_quality_score(self, quality_info):
-        """Рассчитывает общий балл качества"""
-        score = 0
-
-        # Оценка разрешения
-        if 'pixels' in quality_info:
-            pixels = quality_info['pixels']
-            if pixels >= 3840*2160:  # 4K
-                score += 100 * self.quality_weights['resolution']
-            elif pixels >= 1920*1080:  # Full HD
-                score += 80 * self.quality_weights['resolution']
-            elif pixels >= 1280*720:  # HD
-                score += 60 * self.quality_weights['resolution']
-            elif pixels >= 854*480:  # SD
-                score += 40 * self.quality_weights['resolution']
-            else:
-                score += 20 * self.quality_weights['resolution']
-
-        # Оценка битрейта
-        if quality_info.get('bitrate'):
-            bitrate = quality_info['bitrate']
-            if bitrate >= 8000:  # Очень высокий
-                score += 100 * self.quality_weights['bitrate']
-            elif bitrate >= 4000:  # Высокий
-                score += 80 * self.quality_weights['bitrate']
-            elif bitrate >= 2000:  # Средний
-                score += 60 * self.quality_weights['bitrate']
-            elif bitrate >= 1000:  # Низкий
-                score += 40 * self.quality_weights['bitrate']
-            elif bitrate >= 500:  # Очень низкий
-                score += 20 * self.quality_weights['bitrate']
-            else:
-                score += 10 * self.quality_weights['bitrate']
-
-        # Оценка кодеков
-        video_codec = quality_info.get('video_codec', '').lower()
-        if 'h265' in video_codec or 'hevc' in video_codec:
-            score += 100 * self.quality_weights['codec']
-        elif 'h264' in video_codec or 'avc' in video_codec:
-            score += 80 * self.quality_weights['codec']
-        elif 'vp9' in video_codec:
-            score += 70 * self.quality_weights['codec']
-        elif 'mpeg4' in video_codec:
-            score += 50 * self.quality_weights['codec']
-
-        # Оценка FPS
-        if quality_info.get('fps'):
-            fps = quality_info['fps']
-            if fps >= 60:
-                score += 100 * self.quality_weights['fps']
-            elif fps >= 50:
-                score += 90 * self.quality_weights['fps']
-            elif fps >= 30:
-                score += 80 * self.quality_weights['fps']
-            elif fps >= 25:
-                score += 70 * self.quality_weights['fps']
-            elif fps >= 20:
-                score += 50 * self.quality_weights['fps']
-            else:
-                score += 30 * self.quality_weights['fps']
-
-        return min(100, int(score))
-
-    def print_quality_info(self, quality_info):
-        """Выводит информацию о качестве"""
-        if not quality_info:
+    # ============================================================
+    # Проверка сайтов + поиск M3U/M3U8
+    # ============================================================
+    def check_sites_and_find_m3u(self, threads=20, timeout=10):
+        """
+        Проверка работоспособности сайтов и поиск M3U/M3U8 плейлистов.
+        """
+        if not self.scan_m3u and not self.scan_m3u8:
+            print("❌ Выберите хотя бы один формат (M3U или M3U8)!")
             return
 
-        resolution = quality_info.get('resolution', 'N/A')
-        bitrate = quality_info.get('bitrate', 'N/A')
-        fps = quality_info.get('fps', 'N/A')
-        video_codec = quality_info.get('video_codec', 'N/A')
-        quality_score = quality_info.get('quality_score', 0)
+        sites = self.load_custom_sites()
+        if not sites:
+            print("❌ Нет сайтов для проверки! Добавьте URL в files/site.txt")
+            return
 
-        quality_level = "🔴 Низкое"
-        if quality_score >= 80:
-            quality_level = "🟢 Отличное"
-        elif quality_score >= 60:
-            quality_level = "🟡 Хорошее"
-        elif quality_score >= 40:
-            quality_level = "🟠 Среднее"
+        total = len(sites)
+        working = []
+        broken = []
+        m3u_found = []
+        m3u8_found = []
 
-        print(f"    📈 Качество: {quality_level} ({quality_score}/100)")
-        print(f"    📏 Разрешение: {resolution}")
-        if bitrate != 'N/A':
-            print(f"    📊 Битрейт: {bitrate}kbps")
-        if fps != 'N/A':
-            print(f"    ⚡ FPS: {fps}")
-        print(f"    🎬 Кодек: {video_codec}")
+        print(f"\n{'='*60}")
+        print(f"🔍 ПРОВЕРКА {total} САЙТОВ + ПОИСК ПЛЕЙЛИСТОВ")
+        print(f"{'='*60}")
+        print(f"⚡ Потоков: {threads} | Таймаут: {timeout}с")
+        print(f"🎯 Форматы: {self.get_format_string()}")
+        print(f"{'='*60}\n")
 
-    def search_iptv_sources(self, channel_name):
-        """Поиск в IPTV источниках из site.txt"""
-        print("   📡 Поиск в IPTV источниках...")
-        streams = []
+        import requests
 
-        # Фильтруем IPTV источники
-        iptv_sources = []
-        for site in self.custom_sites:
-            if any(keyword in site.lower() for keyword in [
-                'iptv', 'm3u', 'github.com/iptv', 'stream', 'live',
-                'iptv-org', 'raw.githubusercontent.com', '.m3u'
-            ]):
-                iptv_sources.append(site)
+        with ThreadPoolExecutor(max_workers=threads) as executor:
+            future_to_url = {}
+            for url in sites:
+                future = executor.submit(
+                    self._check_single_site_and_find_m3u,
+                    url, timeout, self.scan_m3u, self.scan_m3u8
+                )
+                future_to_url[future] = url
 
-        iptv_sources = iptv_sources[:15]  # Ограничиваем количество
+            done = 0
+            for future in as_completed(future_to_url):
+                done += 1
+                url = future_to_url[future]
 
-        print(f"      📊 Обрабатываем {len(iptv_sources)} IPTV источников")
-
-        for source in iptv_sources:
-            try:
-                source_name = self.get_source_name(source)
-                print(f"      🔍 Проверяем: {source_name}")
-
-                # Прямые M3U ссылки
-                if any(ext in source.lower() for ext in ['.m3u', '.m3u8']):
-                    content = self.download_playlist(source)
-                    if content:
-                        found = self.extract_channels_from_playlist(content, channel_name)
-                        streams.extend(found)
-                        if found:
-                            print(f"      ✅ Найдено {len(found)} потоков")
-
-                # GitHub репозитории
-                elif 'github.com' in source.lower():
-                    github_urls = self.scan_github_for_m3u(source, channel_name)
-                    for m3u_url in github_urls:
-                        content = self.download_playlist(m3u_url)
-                        if content:
-                            found = self.extract_channels_from_playlist(content, channel_name)
-                            streams.extend(found)
-                            if found:
-                                print(f"      ✅ Найдено в {m3u_url.split('/')[-1]}")
-
-                # Другие IPTV сайты
-                elif any(keyword in source.lower() for keyword in ['iptv', 'stream']):
-                    m3u_urls = self.scan_site_for_m3u(source, channel_name)
-                    valid_streams = self.quick_check_urls(m3u_urls, channel_name)
-                    streams.extend(valid_streams)
-                    if valid_streams:
-                        print(f"      ✅ Найдено {len(valid_streams)} потоков")
-
-                time.sleep(0.5)
-
-            except Exception as e:
-                continue
-
-        return streams
-
-    def search_on_search_engines(self, channel_name):
-        """Поиск через поисковые системы из site.txt"""
-        search_urls = []
-
-        search_engines = [
-            site for site in self.custom_sites
-            if any(engine in site for engine in [
-                'yandex.ru', 'google.com', 'bing.com', 'duckduckgo.com'
-            ])
-        ]
-
-        for engine in search_engines[:2]:
-            try:
-                if 'yandex.ru' in engine:
-                    search_url = f"https://yandex.ru/search/?text={quote(channel_name + ' m3u8 live stream')}"
-                    response = self.make_request(search_url)
-                    if response:
-                        content = response.read().decode('utf-8', errors='ignore')
-                        m3u_urls = re.findall(r'https?://[^\s"<>]+\.m3u8?', content)
-                        search_urls.extend(m3u_urls[:3])
-
-                elif 'google.com' in engine:
-                    search_url = f"https://www.google.com/search?q={quote(channel_name + ' m3u8 iptv live')}"
-                    response = self.make_request(search_url)
-                    if response:
-                        content = response.read().decode('utf-8', errors='ignore')
-                        m3u_urls = re.findall(r'https?://[^\s"<>]+\.m3u8?', content)
-                        search_urls.extend(m3u_urls[:3])
-
-            except Exception as e:
-                continue
-
-        return search_urls
-
-    def exact_match(self, channel_title, search_patterns):
-        """Поиск канала по части названия"""
-        channel_title = channel_title.lower().strip()
-        channel_title = re.sub(r'[^\w\s]', ' ', channel_title)
-        channel_title = re.sub(r'\s+', ' ', channel_title).strip()
-
-        search_name = search_patterns[0].lower().strip() if search_patterns else ""
-
-        # Если ищем по одному слову, ищем частичное совпадение
-        if len(search_name.split()) == 1:
-            # Ищем слово целиком
-            if re.search(r'\b' + re.escape(search_name) + r'\b', channel_title):
-                return True
-            # Ищем слово в составе других слов
-            if search_name in channel_title:
-                return True
-
-        # Для многословных запросов проверяем точнее
-        for pattern in search_patterns:
-            pattern = pattern.lower().strip()
-
-            # Точное совпадение
-            if channel_title == pattern:
-                return True
-
-            # Все слова запроса должны быть в названии канала
-            if all(word in channel_title for word in pattern.split()):
-                return True
-
-            # Нечеткое сравнение
-            if self.fuzzy_match(channel_title, pattern):
-                return True
-
-        return False
-
-    def generate_exact_search_patterns(self, channel_name):
-        """Генерирует паттерны для поиска (расширенный поиск)"""
-        name_lower = channel_name.lower().strip()
-
-        # Разбиваем на слова
-        words = name_lower.split()
-        patterns = []
-
-        # Добавляем полное название
-        patterns.append(name_lower)
-
-        # Если название состоит из одного слова
-        if len(words) == 1:
-            single_word = words[0]
-
-            # Разные варианты одного слова
-            patterns.extend([
-                single_word,
-                single_word + ' hd',
-                single_word + ' fhd',
-                single_word + ' 1080p',
-                single_word + ' 720p',
-                single_word.replace(' ', ''),
-                single_word.replace(' ', '.'),
-                single_word.replace(' ', '-'),
-                single_word.replace('тв', 'tv'),
-                single_word.replace('tv', 'тв'),
-                single_word + ' tv',
-                single_word + ' тв',
-                single_word + ' канал',
-                single_word + ' channel',
-                'канал ' + single_word,
-                'channel ' + single_word,
-                ])
-
-            # Для русских каналов
-            if any(cyr in single_word for cyr in 'абвгдеёжзийклмнопрстуфхцчшщъыьэюя'):
-                patterns.extend([
-                    single_word + ' 1',
-                    single_word + ' 2',
-                    single_word + ' 24',
-                    single_word + ' news',
-                    single_word + ' новости',
-                    ])
-
-        # Для многословных названий
-        else:
-            patterns.extend([
-                ' '.join(words),
-                '.'.join(words),
-                '-'.join(words),
-                ''.join(words),
-                words[0],  # Первое слово
-                words[-1],  # Последнее слово
-            ])
-
-            # Добавляем варианты с качествами
-            for quality in ['hd', 'fhd', '1080p', '720p', '4k']:
-                patterns.append(name_lower + ' ' + quality)
-                patterns.append(' '.join(words) + ' ' + quality)
-
-            # Добавляем варианты с цифрами
-            for i in range(1, 10):
-                patterns.append(name_lower + ' ' + str(i))
-                patterns.append(' '.join(words) + ' ' + str(i))
-
-        # Убираем дубликаты и пустые строки
-        unique_patterns = []
-        for p in patterns:
-            if p and len(p) > 1 and p not in unique_patterns:
-                unique_patterns.append(p)
-
-        return unique_patterns[:30]  # Ограничиваем количество
-
-    def search_with_keywords(self, channel_name):
-        """Поиск канала с использованием ключевых слов"""
-        print(f"🔍 Расширенный поиск: '{channel_name}'")
-
-        # Основные ключевые слова для поиска
-        keywords = []
-        name_lower = channel_name.lower().strip()
-        words = name_lower.split()
-
-        # Добавляем основные слова
-        keywords.extend(words)
-
-        # Добавляем варианты транслитерации
-        if len(words) == 1:
-            word = words[0]
-            # Русско-английские варианты
-            trans_dict = {
-                'россия': ['russia', 'rossiya', 'rossia'],
-                'ртр': ['rtr'],
-                'нтв': ['ntv'],
-                'тнт': ['tnt'],
-                'стс': ['sts', 'ctc'],
-                'первый': ['perviy', 'first', '1tv'],
-                'второй': ['vtoroy', 'second'],
-                'новости': ['news', 'novosti'],
-                'спорт': ['sport'],
-                'кино': ['kino', 'cinema'],
-                'музыка': ['music', 'muzyka'],
-                'детский': ['kids', 'detskiy'],
-            }
-
-            if word in trans_dict:
-                keywords.extend(trans_dict[word])
-
-        # Убираем дубликаты
-        keywords = list(set(keywords))
-
-        all_streams = []
-
-        for keyword in keywords[:10]:  # Ограничиваем количество ключевых слов
-            if len(keyword) < 2:  # Пропускаем слишком короткие слова
-                continue
-
-            print(f"   🔎 Поиск по ключевому слову: '{keyword}'")
-
-            # Ищем потоки по ключевому слову
-            streams = self.search_in_online_sources(keyword)
-
-            # Фильтруем потоки, где ключевое слово действительно в названии
-            filtered_streams = []
-            for stream in streams:
-                if 'name' in stream:
-                    stream_name = stream['name'].lower()
-                    if keyword in stream_name:
-                        # Заменяем имя на оригинальное название канала
-                        stream['name'] = channel_name
-                        filtered_streams.append(stream)
-
-            all_streams.extend(filtered_streams)
-
-            if filtered_streams:
-                print(f"      ✅ Найдено {len(filtered_streams)} потоков")
-
-        return all_streams
-
-    def search_in_online_sources(self, channel_name):
-        """Основной поиск канала по всем источникам из site.txt"""
-        print(f"🌐 Поиск канала: '{channel_name}'")
-        print(f"   🔍 Режим: Расширенный поиск (все каналы с '{channel_name}')")
-
-        all_streams = []
-
-        # 1. Точный поиск по полному названию
-        print("   🔍 Этап 1: Точный поиск...")
-        exact_streams = []
-        try:
-            exact_streams = self.search_iptv_sources(channel_name)
-        except:
-            pass
-
-        # Переименовываем найденные потоки
-        for stream in exact_streams:
-            stream['name'] = channel_name
-
-        all_streams.extend(exact_streams)
-        print(f"      ✅ Найдено {len(exact_streams)} точных совпадений")
-
-        # 2. Поиск по ключевым словам (расширенный)
-        print("   🔎 Этап 2: Расширенный поиск...")
-
-        # Разбиваем название на ключевые слова
-        keywords = channel_name.lower().split()
-
-        for keyword in keywords:
-            if len(keyword) >= 3:  # Ищем только значимые слова
                 try:
-                    keyword_streams = self.search_iptv_sources(keyword)
-                    for stream in keyword_streams:
-                        # Проверяем, содержит ли название канала ключевое слово
-                        stream_name = stream.get('name', '').lower()
-                        if keyword in stream_name:
-                            # Заменяем имя на оригинальное название
-                            stream['name'] = channel_name
-                            all_streams.append(stream)
-                    if keyword_streams:
-                        print(f"      ✅ По '{keyword}': найдено {len(keyword_streams)}")
-                except:
-                    continue
+                    result = future.result()
+                    is_working = result['is_working']
+                    status_info = result['status_info']
+                    found_m3u = result.get('m3u_links', [])
+                    found_m3u8 = result.get('m3u8_links', [])
 
-        # 3. Поиск в поисковых системах
-        print("   🔎 Этап 3: Поисковые системы...")
-        search_urls = []
-        for keyword in keywords[:2]:  # Используем 2 основных ключевых слова
-            if len(keyword) >= 3:
-                urls = self.search_on_search_engines(keyword)
-                search_urls.extend(urls)
+                    if is_working:
+                        working.append((url, status_info))
+                        icon = "✅"
+                        extra = ""
+                        if found_m3u or found_m3u8:
+                            extra = f" | 🔗 M3U:{len(found_m3u)} M3U8:{len(found_m3u8)}"
+                            m3u_found.extend([(url, link) for link in found_m3u])
+                            m3u8_found.extend([(url, link) for link in found_m3u8])
+                            # Показываем первые найденные ссылки
+                            for link in found_m3u[:2]:
+                                print(f"      📺 M3U: {link[:90]}")
+                            for link in found_m3u8[:2]:
+                                print(f"      📺 M3U8: {link[:90]}")
+                        print(f"{icon} [{done}/{total}] {url[:70]} ({status_info}){extra}")
+                    else:
+                        broken.append((url, status_info))
+                        print(f"❌ [{done}/{total}] {url[:70]} ({status_info})")
 
-        search_streams = self.quick_check_urls(search_urls, channel_name)
-        all_streams.extend(search_streams)
-        print(f"      ✅ Найдено {len(search_streams)} потоков с поисковиков")
+                except Exception as e:
+                    broken.append((url, str(e)))
+                    print(f"❌ [{done}/{total}] {url[:70]} (Ошибка: {e})")
 
-        # Удаляем дубликаты по URL
-        unique_streams = []
-        seen_urls = set()
-        for stream in all_streams:
-            url = stream.get('url', '')
-            if url and url not in seen_urls:
-                unique_streams.append(stream)
-                seen_urls.add(url)
+        # Сохраняем результаты
+        self._save_site_results(working, broken)
+        self._save_m3u_results(m3u_found, m3u8_found)
 
-        print(f"   📊 ИТОГО: {len(unique_streams)} уникальных потоков")
+        self.stats['m3u_found'] = len(m3u_found)
+        self.stats['m3u8_found'] = len(m3u8_found)
 
-        return unique_streams[:50]  # Ограничиваем количество
+        print(f"\n{'='*60}")
+        print(f"✅ ПРОВЕРКА ЗАВЕРШЕНА!")
+        print(f"   Сайтов: {total}")
+        print(f"   ✅ Рабочих: {len(working)}")
+        print(f"   ❌ Нерабочих: {len(broken)}")
+        print(f"   🔗 Найдено M3U: {len(m3u_found)} | M3U8: {len(m3u8_found)}")
+        print(f"   💾 Результаты сохранены в results/")
+        print(f"{'='*60}")
 
-    def get_source_name(self, url):
-        """Получает читаемое имя источника"""
+    def _check_single_site_and_find_m3u(self, url, timeout, scan_m3u=True, scan_m3u8=True):
+        """Проверка одного сайта + поиск M3U/M3U8"""
+        import requests
+
+        result = {
+            'is_working': False,
+            'status_info': '',
+            'm3u_links': [],
+            'm3u8_links': []
+        }
+
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
+
         try:
-            clean_url = re.sub(r'^https?://(www\.)?', '', url)
-            parts = clean_url.split('/')
-            if len(parts) > 1:
-                if 'github.com' in url and len(parts) >= 3:
-                    return f"github.com/{parts[1]}/{parts[2]}"
-                domain = parts[0]
-                if len(parts) > 1 and parts[1]:
-                    return f"{domain}/{parts[1]}"
-                return domain
-            return clean_url
-        except:
-            return url[:30] + "..." if len(url) > 30 else url
+            resp = requests.get(url, timeout=timeout, allow_redirects=True,
+                              headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
 
-    def scan_site_for_m3u(self, site_url, channel_name):
-        """Сканирует сайт на наличие M3U плейлистов"""
-        found_urls = set()
-        try:
-            response = self.make_request(site_url)
-            if response:
-                content = response.read().decode('utf-8', errors='ignore')
+            result['is_working'] = resp.status_code < 400
+            result['status_info'] = str(resp.status_code)
 
-                # Ищем M3U8 ссылки
-                m3u8_urls = re.findall(r'https?://[^\s"\'<>]+\.m3u8', content)
-                found_urls.update(m3u8_urls[:10])
+            if result['is_working']:
+                content = resp.text
 
-                # Ищем M3U ссылки
-                m3u_urls = re.findall(r'https?://[^\s"\'<>]+\.m3u', content)
-                found_urls.update(m3u_urls[:10])
+                # Поиск M3U
+                if scan_m3u:
+                    m3u_patterns = [
+                        r'https?://[^\s<>"\']+\.m3u(?:\?[^\s<>"\']*)?',
+                        r'["\']([^"\']*\.m3u[^"\']*)["\']',
+                        r'href=["\']([^"\']*\.m3u[^"\']*)["\']',
+                    ]
+                    for pattern in m3u_patterns:
+                        matches = re.findall(pattern, content, re.IGNORECASE)
+                        for match in matches:
+                            link = match if match.startswith('http') else urljoin(url, match)
+                            if link not in result['m3u_links'] and not link.endswith('.m3u8'):
+                                result['m3u_links'].append(link)
 
-                # Ищем ссылки в href
-                playlist_urls = re.findall(r'href="([^"]+\.m3u8?)"', content, re.IGNORECASE)
-                for url in playlist_urls[:10]:
-                    if url.startswith('/'):
-                        full_url = urljoin(site_url, url)
-                        found_urls.add(full_url)
-                    elif url.startswith('http'):
-                        found_urls.add(url)
+                # Поиск M3U8
+                if scan_m3u8:
+                    m3u8_patterns = [
+                        r'https?://[^\s<>"\']+\.m3u8(?:\?[^\s<>"\']*)?',
+                        r'["\']([^"\']*\.m3u8[^"\']*)["\']',
+                        r'href=["\']([^"\']*\.m3u8[^"\']*)["\']',
+                    ]
+                    for pattern in m3u8_patterns:
+                        matches = re.findall(pattern, content, re.IGNORECASE)
+                        for match in matches:
+                            link = match if match.startswith('http') else urljoin(url, match)
+                            if link not in result['m3u8_links']:
+                                result['m3u8_links'].append(link)
 
         except Exception as e:
-            pass
+            result['status_info'] = str(e)
 
-        return list(found_urls)
+        return result
 
-    def download_playlist(self, url):
-        """Скачивает плейлист"""
+    def _save_site_results(self, working, broken):
+        """Сохранение результатов проверки сайтов"""
+        Path("results").mkdir(exist_ok=True)
+
+        with open("results/done.txt", 'w', encoding='utf-8') as f:
+            f.write(f"# Рабочие сайты ({len(working)})\n")
+            f.write(f"# Дата: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            for url, status in working:
+                f.write(f"{url}  # status: {status}\n")
+
+        with open("results/error.txt", 'w', encoding='utf-8') as f:
+            f.write(f"# Нерабочие сайты ({len(broken)})\n")
+            f.write(f"# Дата: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            for url, error in broken:
+                f.write(f"{url}  # error: {error}\n")
+
+    def _save_m3u_results(self, m3u_links, m3u8_links):
+        """Сохранение найденных M3U/M3U8 ссылок"""
+        Path("results").mkdir(exist_ok=True)
+
+        with open("results/m3u_playlists.txt", 'w', encoding='utf-8') as f:
+            f.write(f"# Найденные M3U/M3U8 плейлисты\n")
+            f.write(f"# Дата: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"# Всего M3U: {len(m3u_links)} | M3U8: {len(m3u8_links)}\n\n")
+
+            if m3u_links:
+                f.write(f"# ==================== M3U ({len(m3u_links)}) ====================\n")
+                for source_url, m3u_url in m3u_links:
+                    f.write(f"{m3u_url}  # source: {source_url}\n")
+                f.write("\n")
+
+            if m3u8_links:
+                f.write(f"# ==================== M3U8 ({len(m3u8_links)}) ====================\n")
+                for source_url, m3u8_url in m3u8_links:
+                    f.write(f"{m3u8_url}  # source: {source_url}\n")
+                f.write("\n")
+
+    # ============================================================
+    # Основные методы поиска и обновления каналов
+    # ============================================================
+    def search_in_online_sources(self, channel_name: str) -> list:
+        """Оркестрация поиска: IPTV-источники, поисковые системы, GitHub."""
+        print(f"\n{'='*60}")
+        print(f"🔍 Поиск канала: {channel_name}")
+        print(f"🎯 Форматы: {self.get_format_string()}")
+        print(f"{'='*60}")
+
+        all_urls = []
+
+        print("📡 Поиск в IPTV-источниках...")
+        custom_urls = self.network_searcher.search_iptv_sources(channel_name, self.custom_sites)
+        if custom_urls:
+            all_urls.extend(custom_urls)
+            print(f"   Найдено: {len(custom_urls)} ссылок")
+        else:
+            print(f"   Найдено: 0 ссылок")
+
+        print("🌐 Поиск в поисковых системах...")
+        search_engines = [
+            "https://www.google.com/search?q=",
+            "https://search.yahoo.com/search?p="
+        ]
+        search_urls = self.network_searcher.search_on_search_engines(channel_name, search_engines)
+        if search_urls:
+            all_urls.extend(search_urls)
+            print(f"   Найдено: {len(search_urls)} ссылок")
+        else:
+            print(f"   Найдено: 0 ссылок")
+
+        if not all_urls:
+            print("❌ Ничего не найдено")
+            return []
+
+        unique_urls = list(set(all_urls))
+
+        if not self.scan_m3u:
+            unique_urls = [u for u in unique_urls if '.m3u' not in u.lower() or '.m3u8' in u.lower()]
+        if not self.scan_m3u8:
+            unique_urls = [u for u in unique_urls if '.m3u8' not in u.lower()]
+
+        print(f"\n📊 Всего уникальных ссылок: {len(unique_urls)}")
+        return unique_urls
+
+    def check_single_stream_improved(self, stream_info: dict) -> dict:
+        """Проверка конкретной ссылки через QualityAnalyzer"""
+        url = stream_info.get('url', '')
+        result = {
+            'url': url,
+            'name': stream_info.get('name', ''),
+            'is_working': False,
+            'quality_score': 0,
+            'quality_info': {}
+        }
+
         try:
-            response = self.make_request(url, 'GET', max_retries=2)
-            if response and response.getcode() == 200:
-                return response.read().decode('utf-8', errors='ignore')
-            return None
-        except:
-            return None
+            quality_info = self.quality_analyzer.analyze_stream_quality(url)
+            self.stats['quality_checks'] += 1
 
-    def scan_github_for_m3u(self, github_url, channel_name):
-        """Сканирует GitHub на наличие M3U файлов"""
-        m3u_urls = []
-        try:
-            # Прямые ссылки на M3U
-            if github_url.endswith('.m3u') or github_url.endswith('.m3u8'):
-                m3u_urls.append(github_url)
+            if quality_info.get('is_working', False):
+                if self.quality_analyzer.check_quality_requirements(quality_info):
+                    result['is_working'] = True
+                    result['quality_score'] = self.quality_analyzer.calculate_quality_score(quality_info)
+                    result['quality_info'] = quality_info
+                else:
+                    self.stats['failed_quality_checks'] += 1
+            else:
+                self.stats['failed_quality_checks'] += 1
+        except Exception as e:
+            print(f"   ⚠️ Ошибка проверки {url}: {e}")
 
-            # GitHub pages IPTV-org
-            elif 'iptv-org.github.io' in github_url:
-                categories = ['news', 'sports', 'entertainment', 'kids', 'music', 'movies']
-                for category in categories:
-                    m3u_urls.append(f"https://iptv-org.github.io/iptv/categories/{category}.m3u")
+        return result
 
-            # GitHub raw content
-            elif 'raw.githubusercontent.com' in github_url:
-                m3u_urls.append(github_url)
-
-            # GitHub blob URLs
-            elif 'github.com' in github_url and '/blob/' in github_url:
-                raw_url = github_url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
-                if raw_url.endswith(('.m3u', '.m3u8')):
-                    m3u_urls.append(raw_url)
-
-        except:
-            pass
-
-        return m3u_urls[:10]
-
-    def quick_check_urls(self, urls, channel_name):
-        """Быстрая проверка URL"""
+    def check_streams(self, streams: list, search_name: str) -> list:
+        """Проверка всех найденных ссылок с фильтрацией по имени (многопоточно)"""
+        print(f"\n🔬 Проверка {len(streams)} потоков для '{search_name}'...")
+        search_patterns = self.pattern_matcher.generate_exact_search_patterns(search_name)
+        
+        # Фильтруем по имени
+        filtered_streams = []
+        for stream in streams:
+            stream_name = stream.get('name', '')
+            if self.pattern_matcher.exact_match(stream_name, search_patterns):
+                filtered_streams.append(stream)
+        
+        print(f"   Отфильтровано по имени: {len(filtered_streams)} из {len(streams)}")
+        
         valid_streams = []
-
-        def check_url(url):
-            try:
-                # YouTube ссылки
-                if 'youtube.com/watch' in url or 'youtu.be' in url:
-                    return {
-                        'name': channel_name,
-                        'url': url,
-                        'source': 'youtube',
-                        'group': 'YouTube',
-                        'stability_score': 8
-                    }
-
-                # M3U8 ссылки
-                elif '.m3u8' in url.lower():
-                    response = self.make_request(url, 'HEAD', max_retries=1)
-                    if response and response.getcode() == 200:
-                        return {
-                            'name': channel_name,
-                            'url': url,
-                            'source': 'm3u8',
-                            'group': 'M3U8',
-                            'stability_score': 6
-                        }
-
-                # M3U ссылки
-                elif '.m3u' in url.lower():
-                    response = self.make_request(url, 'GET', max_retries=1)
-                    if response and response.getcode() == 200:
-                        content = response.read(1024).decode('utf-8', errors='ignore')
-                        if '#EXTM3U' in content:
-                            return {
-                                'name': channel_name,
-                                'url': url,
-                                'source': 'm3u',
-                                'group': 'M3U',
-                                'stability_score': 5
-                            }
-
-                return None
-            except:
-                return None
-
-        # Проверяем URL параллельно
-        urls_to_check = urls[:15]
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            futures = [executor.submit(check_url, url) for url in urls_to_check]
+        
+        # Многопоточная проверка (30 потоков)
+        with ThreadPoolExecutor(max_workers=30) as executor:
+            futures = {executor.submit(self.check_single_stream_improved, stream): stream for stream in filtered_streams}
+            done = 0
             for future in as_completed(futures):
-                result = future.result()
-                if result:
-                    valid_streams.append(result)
-
+                done += 1
+                try:
+                    result = future.result()
+                    if result['is_working']:
+                        valid_streams.append(result)
+                        print(f"   ✅ [{done}/{len(filtered_streams)}] {result['name'][:50]} (score: {result['quality_score']})")
+                    else:
+                        if done % 10 == 0:  # Показываем прогресс каждые 10
+                            print(f"   🔄 Проверено: {done}/{len(filtered_streams)} | Найдено: {len(valid_streams)}")
+                except:
+                    pass
+        
+        valid_streams.sort(key=lambda x: x['quality_score'], reverse=True)
+        print(f"\n📊 Рабочих потоков: {len(valid_streams)}")
         return valid_streams
 
-    def extract_channels_from_playlist(self, playlist_content, channel_name):
-        """Извлекает каналы из плейлиста"""
-        streams = []
-        lines = playlist_content.split('\n')
-        search_patterns = self.generate_exact_search_patterns(channel_name)
-
-        i = 0
-        while i < len(lines):
-            line = lines[i].strip()
-            if line.startswith('#EXTINF:'):
-                channel_info = self.parse_extinf_line(line)
-                channel_title = channel_info.get('name', '').lower()
-
-                if self.exact_match(channel_title, search_patterns):
-                    if i + 1 < len(lines):
-                        url = lines[i + 1].strip()
-                        if url and not url.startswith('#') and url.startswith('http'):
-                            if self.is_high_quality_channel(channel_info):
-                                stability_score = self.calculate_stability_score(channel_info, url)
-                                streams.append({
-                                    'name': channel_name,
-                                    'url': url,
-                                    'source': 'playlist',
-                                    'group': channel_info.get('group-title', 'Общие'),
-                                    'tvg_id': channel_info.get('tvg-id', ''),
-                                    'tvg_logo': channel_info.get('tvg-logo', ''),
-                                    'quality_score': self.calculate_quality_score(channel_info),
-                                    'stability_score': stability_score
-                                })
-                                i += 1
-            i += 1
-
-        streams.sort(key=lambda x: (x.get('stability_score', 0), x.get('quality_score', 0)), reverse=True)
-        return streams[:10]
-
-    def fuzzy_match(self, text, pattern):
-        """Нечеткое сравнение"""
-        text = text.lower()
-        pattern = pattern.lower()
-        if len(pattern) < 4:
-            return pattern in text
-
-        variations = [
-            pattern,
-            pattern.replace(' ', ''),
-            pattern.replace(' ', '.'),
-            pattern.replace(' ', '-'),
-            pattern.replace('тв', 'tv'),
-            pattern.replace('tv', 'тв'),
-        ]
-        for var in variations:
-            if var in text and len(var) > 2:
-                return True
-        return False
-
-    def is_high_quality_channel(self, channel_info):
-        """Проверяет качество канала"""
-        name = channel_info.get('name', '').lower()
-        low_quality_indicators = [
-            'test', 'тест', 'demo', 'демо', 'sample', 'пример',
-            'low', 'низк', 'bad', 'плох', 'fake', 'фейк',
-            'offline', 'оффлайн', 'not working', 'не работает'
-        ]
-        return not any(indicator in name for indicator in low_quality_indicators)
-
-    def calculate_stability_score(self, channel_info, url):
-        """Рассчитывает стабильность"""
-        score = 5
-        name = channel_info.get('name', '').lower()
-        url_lower = url.lower()
-
-        stable_indicators = {
-            'github.com': 3, 'raw.githubusercontent.com': 3,
-            'iptv-org.github.io': 3, 'youtube.com': 2, 'youtu.be': 2
-        }
-        unstable_indicators = {
-            'test': -3, 'тест': -3, 'temp': -2, 'localhost': -5
-        }
-
-        for domain, points in stable_indicators.items():
-            if domain in url_lower:
-                score += points
-        for indicator, penalty in unstable_indicators.items():
-            if indicator in name:
-                score += penalty
-
-        return max(1, min(10, score))
-
-    def calculate_quality_score(self, channel_info):
-        """Рассчитывает качество"""
-        score = 0
-        name = channel_info.get('name', '').lower()
-
-        quality_indicators = {
-            'hd': 10, 'fhd': 15, 'fullhd': 15, '1080p': 15,
-            '720p': 10, '4k': 20, 'uhd': 20
-        }
-
-        for indicator, points in quality_indicators.items():
-            if indicator in name:
-                score += points
-
-        if channel_info.get('tvg-logo'):
-            score += 5
-        if channel_info.get('tvg-id'):
-            score += 3
-
-        return score
-
-    def parse_extinf_line(self, extinf_line):
-        """Парсит строку EXTINF"""
-        info = {}
-        attributes = re.findall(r'(\w+)=["\']([^"\']*)["\']', extinf_line)
-        for key, value in attributes:
-            info[key] = value
-
-        if ',' in extinf_line:
-            name = extinf_line.split(',')[-1].strip()
-            info['name'] = re.sub(r'["\'<>]', '', name)
-
-        return info
-
-    def check_single_stream_improved(self, stream_info):
-        """Проверка работоспособности ссылки с анализом качества"""
+    def search_and_update_channel(self, channel_name: str) -> bool:
         try:
-            url = stream_info['url']
-            channel_name = stream_info.get('name', 'Unknown')
-
-            if not url.startswith('http'):
-                return None
-
-            print(f"    🔧 Проверка: {channel_name} - {url[:60]}...")
-
-            # YouTube ссылки
-            if 'youtube.com/watch' in url or 'youtu.be' in url:
-                response = self.make_request(url, 'HEAD', max_retries=1)
-                if response and response.getcode() == 200:
-                    # Для YouTube оцениваем качество по названию
-                    quality_score = 70  # Базовая оценка для YouTube
-                    return {
-                        **stream_info,
-                        'working': True,
-                        'status': 'YouTube доступен',
-                        'quality': 'high',
-                        'stable': True,
-                        'quality_score': quality_score
-                    }
-                else:
-                    return {**stream_info, 'working': False, 'status': 'YouTube недоступен', 'quality': 'none', 'stable': False}
-
-            # M3U8 ссылки
-            elif '.m3u8' in url.lower():
-                response = self.make_request(url, 'HEAD')
-                if response and response.getcode() == 200:
-                    # Проверка через FFmpeg если доступен
-                    if self.ffmpeg_path and self.enable_deep_check:
-                        try:
-                            # Базовая проверка доступности
-                            cmd = [self.ffmpeg_path, '-i', url, '-t', '3', '-f', 'null', '-', '-hide_banner', '-loglevel', 'error']
-                            result = subprocess.run(cmd, capture_output=True, timeout=10)
-                            if result.returncode == 0:
-                                # Расширенный анализ качества
-                                quality_info = self.analyze_stream_quality(url)
-
-                                if quality_info and quality_info.get('meets_requirements', False):
-                                    quality_score = quality_info.get('quality_score', 50)
-                                    quality_level = "high" if quality_score >= 70 else "medium" if quality_score >= 50 else "low"
-
-                                    return {
-                                        **stream_info,
-                                        'working': True,
-                                        'status': 'FFmpeg проверен',
-                                        'quality': quality_level,
-                                        'stable': True,
-                                        'quality_score': quality_score,
-                                        'video_info': quality_info
-                                    }
-                        except:
-                            pass
-
-                    # Базовая проверка
-                    content_type = response.headers.get('Content-Type', '').lower()
-                    if any(ct in content_type for ct in ['video', 'application', 'mpegurl']):
-                        return {
-                            **stream_info,
-                            'working': True,
-                            'status': 'M3U8 доступен',
-                            'quality': 'medium',
-                            'stable': True,
-                            'quality_score': 50
-                        }
-
-            # M3U ссылки
-            elif '.m3u' in url.lower() and not url.endswith('.m3u8'):
-                response = self.make_request(url, 'GET')
-                if response and response.getcode() == 200:
-                    content = response.read(2048).decode('utf-8', errors='ignore')
-                    if '#EXTM3U' in content:
-                        return {
-                            **stream_info,
-                            'working': True,
-                            'status': 'M3U валидный',
-                            'quality': 'medium',
-                            'stable': True,
-                            'quality_score': 40
-                        }
-
-            # Общая проверка
-            response = self.make_request(url, 'HEAD')
-            if response and response.getcode() == 200:
-                content_type = response.headers.get('Content-Type', '').lower()
-                if any(ct in content_type for ct in ['video/', 'audio/', 'application/']):
-                    return {
-                        **stream_info,
-                        'working': True,
-                        'status': 'Поток доступен',
-                        'quality': 'medium',
-                        'stable': False,
-                        'quality_score': 30
-                    }
-
-            return {
-                **stream_info,
-                'working': False,
-                'status': 'Не доступен',
-                'quality': 'none',
-                'stable': False,
-                'quality_score': 0
-            }
-
+            if self.search_mode == "broad":
+                # Расширенный поиск
+                all_valid = []
+                search_terms = [channel_name]
+                for suffix in ['HD', 'FHD', 'UHD', '4K', '+2', '+4', '+7', '+8', '-2', '-4', '-7']:
+                    search_terms.append(f"{channel_name} {suffix}")
+                
+                total_terms = len(search_terms)
+                for idx, term in enumerate(search_terms, 1):
+                    print(f"\n{'='*60}")
+                    print(f"🔍 Поиск канала ({idx}/{total_terms}): {term}")
+                    print(f"🎯 Форматы: {self.get_format_string()}")
+                    print(f"{'='*60}")
+                    
+                    urls = self.search_in_online_sources(term)
+                    if urls:
+                        limit = max(5, self.max_check_urls // total_terms)
+                        if len(urls) > limit:
+                            print(f"   ⚡ Ограничиваем до {limit} ссылок")
+                            urls = urls[:limit]
+                        streams = [{'url': url, 'name': term} for url in urls]
+                        valid = self.check_streams(streams, term)
+                        all_valid.extend(valid)
+                
+                if not all_valid:
+                    print(f"❌ Канал '{channel_name}' не найден")
+                    return False
+                
+                print(f"\n📊 Всего найдено рабочих потоков: {len(all_valid)}")
+                return self.update_channel_in_playlist(channel_name, all_valid)
+            else:
+                # Точный поиск
+                urls = self.search_in_online_sources(channel_name)
+                if not urls:
+                    return False
+                if len(urls) > self.max_check_urls:
+                    print(f"   ⚡ Ограничиваем до {self.max_check_urls} ссылок")
+                    urls = urls[:self.max_check_urls]
+                streams = [{'url': url, 'name': channel_name} for url in urls]
+                valid_streams = self.check_streams(streams, channel_name)
+                if not valid_streams:
+                    return False
+                return self.update_channel_in_playlist(channel_name, valid_streams)
         except Exception as e:
-            return {
-                **stream_info,
-                'working': False,
-                'status': f'Ошибка: {str(e)}',
-                'quality': 'none',
-                'stable': False,
-                'quality_score': 0
-            }
-
-    def check_streams(self, streams, search_name):
-        """Проверяет все найденные ссылки"""
-        if not streams:
-            return []
-
-        print(f"🔧 Проверка {len(streams)} найденных ссылок...")
-        print(f"   🎯 Фильтрация по: '{search_name}'")
-
-        working_streams = []
-        search_lower = search_name.lower()
-
-        # Разбиваем поисковый запрос на слова
-        search_words = search_lower.split()
-
-        for i, stream in enumerate(streams, 1):
-            # Проверяем, содержит ли название канала поисковые слова
-            stream_name = stream.get('name', '').lower()
-            stream_title = stream.get('original_name', stream_name)
-
-            # Проверка на релевантность
-            is_relevant = False
-
-            if len(search_words) == 1:
-                # Для одного слова - частичное совпадение
-                word = search_words[0]
-                if word in stream_title or re.search(r'\b' + re.escape(word) + r'\b', stream_title):
-                    is_relevant = True
-            else:
-                # Для нескольких слов - проверяем все слова
-                if all(word in stream_title for word in search_words):
-                    is_relevant = True
-
-            if not is_relevant:
-                print(f"  [{i}/{len(streams)}] ⏭️  Пропуск: '{stream_title}' не соответствует '{search_name}'")
-                continue
-
-            # Проверяем работоспособность
-            result = self.check_single_stream_improved(stream)
-            if result:
-                if result['working']:
-                    working_streams.append(result)
-                    stability_icon = '🟢' if result.get('stable') else '🟡'
-                    quality_icon = '🟢' if result.get('quality') == 'high' else '🟡' if result.get('quality') == 'medium' else '🔴'
-                    print(f"  [{i}/{len(streams)}] ✅ {quality_icon}{stability_icon} РАБОТАЕТ - {result['status']}")
-                else:
-                    print(f"  [{i}/{len(streams)}] ❌ Не работает - {result['status']}")
-
-            if i < len(streams):
-                time.sleep(1)
-
-        # Сортируем по релевантности и качеству
-        if working_streams:
-            def relevance_score(stream):
-                name = stream.get('name', '').lower()
-                score = 0
-
-                # Точное совпадение дает максимальный балл
-                if name == search_lower:
-                    score += 100
-
-                # Проверяем каждое слово
-                for word in search_words:
-                    if re.search(r'\b' + re.escape(word) + r'\b', name):
-                        score += 50
-                    elif word in name:
-                        score += 30
-
-                # Добавляем качество
-                score += stream.get('quality_score', 0) / 10
-
-                return score
-
-            working_streams.sort(key=relevance_score, reverse=True)
-
-            # Группируем по типам каналов
-            grouped_streams = {}
-            for stream in working_streams:
-                name = stream.get('name', '')
-                if name not in grouped_streams:
-                    grouped_streams[name] = []
-                grouped_streams[name].append(stream)
-
-            # Берем лучшие из каждой группы
-            final_streams = []
-            for name, streams in grouped_streams.items():
-                # Сортируем внутри группы по качеству
-                streams.sort(key=lambda x: x.get('quality_score', 0), reverse=True)
-                final_streams.extend(streams[:2])  # Берем 2 лучших из каждой группы
-
-            return final_streams[:10]  # Ограничиваем общее количество
-
-        return []
-
-    def search_and_update_channel(self, channel_name):
-        """Поиск и обновление канала"""
-        print(f"\n🚀 Поиск: '{channel_name}'")
-        print(f"⚙️  Настройки проверки: Глубокая проверка={'ВКЛ' if self.enable_deep_check else 'ВЫКЛ'}, Длительность={self.check_duration}с")
-        print("⏳ Это может занять 2-3 минуты...")
-
-        # Загружаем существующие каналы
-        existing_channels = self.load_existing_channels()
-
-        # Ищем существующий канал и сохраняем его оригинальные данные
-        final_channel_name = channel_name
-        old_streams = []
-        original_group = None
-        original_tvg_id = None
-        original_tvg_logo = None
-
-        for existing_name in existing_channels.keys():
-            if existing_name.lower() == channel_name.lower():
-                final_channel_name = existing_name
-                old_streams = existing_channels[final_channel_name].copy()
-                # Сохраняем оригинальные данные из первого стрима
-                if old_streams:
-                    original_group = old_streams[0].get('group', None)
-                    original_tvg_id = old_streams[0].get('tvg_id', '')
-                    original_tvg_logo = old_streams[0].get('tvg_logo', '')
-                break
-
-        # Если не нашли оригинальный group-title, определяем из cartolog.txt
-        if not original_group:
-            original_group = self.get_channel_category(final_channel_name)
-            print(f"   ℹ️  Категория из cartolog.txt: '{original_group}'")
-
-        # Поиск новых ссылок
-        start_time = time.time()
-        all_streams = self.search_in_online_sources(final_channel_name)
-
-        if not all_streams:
-            print("❌ Не найдено новых ссылок для проверки")
-            if old_streams:
-                print("💡 Сохранены существующие рабочие ссылки")
-                return True
+            print(f"💥 Ошибка: {e}")
             return False
-
-        # Проверка работоспособности с анализом качества
-        working_streams = self.check_streams(all_streams, final_channel_name)
-        search_time = time.time() - start_time
-
-        if working_streams:
-            # Применяем оригинальный group-title и другие данные ко всем стримам
-            for stream in working_streams:
-                stream['group'] = original_group
-                # Восстанавливаем оригинальные данные если они были
-                if original_tvg_id:
-                    stream['tvg_id'] = original_tvg_id
-                if original_tvg_logo:
-                    stream['tvg_logo'] = original_tvg_logo
-
-                # Добавляем дополнительную информацию о качестве в group
-                quality_info = ""
-                if stream.get('video_info'):
-                    vi = stream['video_info']
-                    if vi.get('resolution'):
-                        quality_info = f" [{vi['resolution']}"
-                        if vi.get('bitrate'):
-                            quality_info += f" {vi['bitrate']}kbps"
-                        quality_info += "]"
-
-                if quality_info and original_group:
-                    stream['group'] = f"{original_group}{quality_info}"
-
-            # Объединяем старые и новые ссылки
-            combined_streams = self.merge_streams(old_streams, working_streams)
-
-            print("\n🎉" + "=" * 60)
-            print(f"✅ НАЙДЕНО РАБОЧИХ ССЫЛОК: {len(working_streams)}")
-            print(f"🎯 Группа: {original_group}")
-            print(f"⏱️  Время поиска: {search_time:.1f} секунд")
-            print("=" * 60)
-
-            # Обновляем канал
-            success = self.update_channel_in_playlist(final_channel_name, combined_streams)
-
-            if success:
-                print(f"\n🔄 КАНАЛ ОБНОВЛЕН: {final_channel_name}")
-                print(f"📺 Всего ссылок: {len(combined_streams)}")
-                print(f"📂 Группа: {original_group}")
-            return True
-
-        else:
-            print(f"\n❌ Для канала '{final_channel_name}' не найдено рабочих ссылок")
-            if old_streams:
-                print("💡 Сохранены существующие рабочие ссылки")
-                return True
-            else:
-                self.update_channel_in_playlist(final_channel_name, [])
-                return False
-
-    def merge_streams(self, old_streams, new_streams):
-        """Объединяет ссылки с учетом качества"""
-        merged = []
-        seen_urls = set()
-
-        # Сохраняем оригинальный group из старых стримов (если есть)
-        original_group = None
-        if old_streams:
-            original_group = old_streams[0].get('group', None)
-
-        # Сначала новые с высоким качеством
-        for stream in new_streams:
-            if (stream['url'] not in seen_urls and
-                    stream.get('working', True) and
-                    stream.get('quality_score', 0) >= 50):
-                # Если есть оригинальный group, используем его
-                if original_group and not stream.get('group'):
-                    stream['group'] = original_group
-                merged.append(stream)
-                seen_urls.add(stream['url'])
-
-        # Затем старые стабильные (сохраняем оригинальные группы)
-        for stream in old_streams:
-            if (stream['url'] not in seen_urls and
-                    stream.get('working', True) and
-                    stream.get('stable', False)):
-                merged.append(stream)
-                seen_urls.add(stream['url'])
-
-        # Затем остальные новые
-        for stream in new_streams:
-            if stream['url'] not in seen_urls and stream.get('working', True):
-                # Если есть оригинальный group, используем его
-                if original_group and not stream.get('group'):
-                    stream['group'] = original_group
-                merged.append(stream)
-                seen_urls.add(stream['url'])
-
-        return merged[:10]  # Ограничиваем количество ссылок
-
-    def update_channel_in_playlist(self, channel_name, new_streams):
-        """Обновляет канал в плейлисте"""
-        existing_channels = self.load_existing_channels()
-
-        if new_streams:
-            existing_channels[channel_name] = new_streams
-            print(f"🔄 Обновлен канал: {channel_name} ({len(new_streams)} ссылок)")
-        else:
-            if channel_name in existing_channels:
-                del existing_channels[channel_name]
-                print(f"🗑️ Удален канал: {channel_name}")
-
-        return self.save_full_playlist(existing_channels)
-
-    def load_existing_channels(self):
-        """Загружает существующие каналы"""
-        channels = {}
-        if os.path.exists(self.playlist_file):
-            try:
-                with open(self.playlist_file, 'r', encoding='utf-8') as f:
-                    content = f.read()
-
-                # Динамическая часть (после разделителя)
-                parts = content.split('#############################')
-                if len(parts) > 2:
-                    dynamic_content = parts[2]
-                    lines = dynamic_content.split('\n')
-
-                    i = 0
-                    current_stream = None
-
-                    while i < len(lines):
-                        line = lines[i].strip()
-                        if line.startswith('#EXTINF:'):
-                            channel_info = self.parse_extinf_line(line)
-                            current_stream = channel_info
-
-                            if i + 1 < len(lines):
-                                url_line = lines[i + 1].strip()
-                                if url_line.startswith('http'):
-                                    channel_name = current_stream.get('name', 'Unknown')
-                                    if channel_name not in channels:
-                                        channels[channel_name] = []
-
-                                    channels[channel_name].append({
-                                        'name': current_stream.get('name', 'Unknown'),
-                                        'url': url_line,
-                                        'group': current_stream.get('group-title', 'Общие'),
-                                        'tvg_id': current_stream.get('tvg-id', ''),
-                                        'tvg_logo': current_stream.get('tvg-logo', ''),
-                                        'quality': 'medium'
-                                    })
-                                    i += 1
-                        i += 1
-
-            except Exception as e:
-                print(f"❌ Ошибка загрузки плейлиста: {e}")
-
-        return channels
-
-    def save_full_playlist(self, channels_dict):
-        """Сохраняет плейлист с информацией о качестве"""
-        try:
-            os.makedirs(os.path.dirname(self.playlist_file), exist_ok=True)
-
-            # Статическая часть
-            static_content = ""
-            if os.path.exists(self.playlist_file):
-                with open(self.playlist_file, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    parts = content.split('#############################')
-                    if len(parts) >= 2:
-                        static_content = '#############################'.join(parts[:2]) + '#############################\n\n'
-                    else:
-                        static_content = self.create_default_static_content()
-            else:
-                static_content = self.create_default_static_content()
-
-            # Записываем плейлист
-            with open(self.playlist_file, 'w', encoding='utf-8') as f:
-                f.write(static_content)
-                for channel_name, streams in channels_dict.items():
-                    for stream in streams:
-                        extinf_parts = ['#EXTINF:-1']
-                        if stream.get('tvg_id'):
-                            extinf_parts.append(f'tvg-id="{stream["tvg_id"]}"')
-                        if stream.get('tvg_logo'):
-                            extinf_parts.append(f'tvg-logo="{stream["tvg_logo"]}"')
-                        if stream.get('group'):
-                            extinf_parts.append(f'group-title="{stream["group"]}"')
-                        if stream.get('quality'):
-                            extinf_parts.append(f'quality="{stream["quality"]}"')
-                        if stream.get('stable'):
-                            extinf_parts.append(f'stable="{stream["stable"]}"')
-                        if stream.get('quality_score'):
-                            extinf_parts.append(f'quality-score="{stream["quality_score"]}"')
-
-                        # Добавляем информацию о разрешении если есть
-                        if stream.get('video_info') and stream['video_info'].get('resolution'):
-                            extinf_parts.append(f'resolution="{stream["video_info"]["resolution"]}"')
-
-                        extinf_parts.append(f', {stream["name"]}')
-                        f.write(' '.join(extinf_parts) + '\n')
-                        f.write(f'{stream["url"]}\n')
-
-            print(f"💾 Плейлист сохранен: {self.playlist_file}")
-            print(f"📊 Всего каналов: {len(channels_dict)}")
-            return True
-
-        except Exception as e:
-            print(f"❌ Ошибка сохранения: {e}")
-            return False
-
-    def create_default_static_content(self):
-        """Создает статическую часть плейлиста"""
-        return f'''#EXTM3U
-# Обновлен: {time.strftime('%Y-%m-%d %H:%M:%S')}
-# Статическая часть - НЕ ИЗМЕНЯТЬ!
-# Динамическая часть ниже
-
-#############################
-#EXTINF:-1 group-title="Информационные" quality="high", ТГ канал https://t.me/NexusIPTVGroups
-https://edge1.1internet.tv/
-#EXTINF:-1 group-title="Информационные" quality="high", Поддержка проекта
-https://edge1.1internet.tv/
-#EXTINF:-1 group-title="Информационные" quality="high", GitHub проекта
-https://edge1.1internet.tv/
-#############################
-
-'''
 
     def refresh_all_channels(self):
-        """Обновляет все каналы"""
-        print("🔄 ОБНОВЛЕНИЕ ВСЕХ КАНАЛОВ...")
-        existing_channels = self.load_existing_channels()
+        """Обновить все каналы из плейлиста"""
+        print("\n🔄 ПОЛНОЕ ОБНОВЛЕНИЕ ВСЕХ КАНАЛОВ")
+        print(f"🎯 Форматы: {self.get_format_string()}")
 
+        existing_channels = self.load_existing_channels()
         if not existing_channels:
-            print("❌ Нет каналов для обновления")
+            print("📝 Плейлист пуст. Запуск поиска из Channels.txt...")
+            self.search_from_channels_list()
             return
 
-        print(f"📊 Найдено каналов: {len(existing_channels)}")
-        updated_count = 0
-        failed_count = 0
+        total = len(existing_channels)
+        updated = 0
+        failed = 0
 
-        for channel_name in list(existing_channels.keys()):
-            print(f"\n{'='*60}")
-            print(f"🔄 ОБНОВЛЕНИЕ: {channel_name}")
-            print(f"{'='*60}")
-
-            try:
-                # Сохраняем ВСЮ оригинальную информацию
-                original_name = channel_name
-                original_group = None
-                original_tvg_id = ""
-                original_tvg_logo = ""
-
-                if existing_channels[channel_name]:
-                    first_stream = existing_channels[channel_name][0]
-                    original_group = first_stream.get('group', None)
-                    original_tvg_id = first_stream.get('tvg_id', '')
-                    original_tvg_logo = first_stream.get('tvg_logo', '')
-
-                # Если нет оригинальной группы, определяем из cartolog.txt
-                if not original_group:
-                    original_group = self.get_channel_category(channel_name)
-                    print(f"   ℹ️  Категория из cartolog.txt: '{original_group}'")
-
-                working_streams = self.search_channel_online(channel_name)
-
-                if working_streams:
-                    # Восстанавливаем ВСЮ оригинальную информацию
-                    for stream in working_streams:
-                        stream['name'] = original_name
-                        stream['group'] = original_group  # Важно: сохраняем оригинальную группу
-                        if original_tvg_id:
-                            stream['tvg_id'] = original_tvg_id
-                        if original_tvg_logo:
-                            stream['tvg_logo'] = original_tvg_logo
-
-                    existing_channels[channel_name] = working_streams
-                    updated_count += 1
-                    print(f"✅ ОБНОВЛЕН: {original_name} (группа: {original_group})")
-                else:
-                    del existing_channels[channel_name]
-                    failed_count += 1
-                    print(f"❌ УДАЛЕН: {channel_name}")
-
+        for i, channel_name in enumerate(existing_channels.keys(), 1):
+            print(f"\n{'─'*50}")
+            print(f"[{i}/{total}] Обновление: {channel_name}")
+            if self.search_and_update_channel(channel_name):
+                updated += 1
+            else:
+                failed += 1
+            if i < total:
+                print("⏳ Пауза 2 сек...")
                 time.sleep(2)
 
-            except Exception as e:
-                print(f"💥 ОШИБКА: {e}")
-                failed_count += 1
-                continue
-
-        if self.save_full_playlist(existing_channels):
-            print(f"\n🎉 ОБНОВЛЕНИЕ ЗАВЕРШЕНО!")
-            print(f"✅ Обновлено: {updated_count}")
-            print(f"❌ Удалено: {failed_count}")
-
-    def search_channel_online(self, channel_name):
-        """Поиск канала"""
-        print(f"🎯 Поиск: '{channel_name}'")
-
-        # Определяем группу из cartolog.txt
-        group = self.get_channel_category(channel_name)
-        print(f"   📂 Группа из cartolog.txt: '{group}'")
-
-        all_streams = self.search_in_online_sources(channel_name)
-
-        unique_streams = []
-        seen_urls = set()
-        for stream in all_streams:
-            if stream['url'] not in seen_urls:
-                stream['name'] = channel_name
-                stream['group'] = group  # Устанавливаем группу из cartolog.txt
-                unique_streams.append(stream)
-                seen_urls.add(stream['url'])
-
-        print(f"📊 Найдено ссылок: {len(unique_streams)}")
-        if not unique_streams:
-            return []
-
-        working_streams = self.check_streams(unique_streams, channel_name)
-        for stream in working_streams:
-            stream['name'] = channel_name
-            # Если группа не установлена, устанавливаем из cartolog.txt
-            if not stream.get('group'):
-                stream['group'] = group
-
-        return working_streams
+        print(f"\n{'='*50}")
+        print(f"✅ Обновлено: {updated} | ❌ Ошибок: {failed}")
 
     def search_from_channels_list(self):
-        """Поиск по списку из Channels.txt"""
+        """Массовый поиск по списку Channels.txt"""
         if not self.channels_list:
-            print("❌ Файл Channels.txt пуст или не найден")
+            print("❌ Список каналов пуст! Добавьте каналы в files/Channels.txt")
             return
 
-        print(f"🎯 ПОИСК ПО СПИСКУ ИЗ {len(self.channels_list)} КАНАЛОВ...")
-        print(f"⚙️  Настройки: Глубокая проверка={'ВКЛ' if self.enable_deep_check else 'ВЫКЛ'}")
-        success_count = 0
-        failed_count = 0
+        print(f"\n📋 Загрузка {len(self.channels_list)} каналов из списка...")
+        print(f"🎯 Форматы: {self.get_format_string()}")
+        found = 0
+        not_found = 0
 
         for i, channel_name in enumerate(self.channels_list, 1):
-            print(f"\n{'='*70}")
-            print(f"📺 [{i}/{len(self.channels_list)}] ПОИСК: {channel_name}")
-            print(f"{'='*70}")
+            print(f"\n{'─'*50}")
+            print(f"[{i}/{len(self.channels_list)}] Поиск: {channel_name}")
+            if self.search_and_update_channel(channel_name):
+                found += 1
+            else:
+                not_found += 1
+            if i < len(self.channels_list):
+                print("⏳ Пауза 3 сек...")
+                time.sleep(3)
 
-            try:
-                if self.search_and_update_channel(channel_name):
-                    success_count += 1
-                    print(f"✅ УСПЕХ: {channel_name}")
-                else:
-                    failed_count += 1
-                    print(f"❌ НЕ УДАЛОСЬ: {channel_name}")
+        print(f"\n{'='*50}")
+        print(f"✅ Найдено: {found} | ❌ Не найдено: {not_found}")
 
-                if i < len(self.channels_list):
-                    time.sleep(3)
+    # ============================================================
+    # Работа с плейлистом
+    # ============================================================
+    def load_existing_channels(self) -> dict:
+        return self.m3u_parser.load_existing_channels(self.playlist_file)
 
-            except Exception as e:
-                print(f"💥 ОШИБКА: {e}")
-                failed_count += 1
-                continue
+    def save_full_playlist(self, channels_dict: dict) -> bool:
+        static = self.m3u_parser.create_default_static_content()
+        return self.m3u_parser.save_full_playlist(self.playlist_file, channels_dict, static)
 
-        print(f"\n🎉 ПОИСК ЗАВЕРШЕН!")
-        print(f"✅ Найдено: {success_count} каналов")
-        print(f"❌ Не найдено: {failed_count} каналов")
+    def update_channel_in_playlist(self, channel_name: str, new_streams: list) -> bool:
+        try:
+            existing_channels = self.load_existing_channels()
+            old_streams = existing_channels.get(channel_name, [])
+            merged_streams = self.merge_streams(old_streams, new_streams)
+            existing_channels[channel_name] = merged_streams
+            return self.save_full_playlist(existing_channels)
+        except Exception as e:
+            print(f"❌ Ошибка обновления плейлиста: {e}")
+            return False
 
-        # Выводим статистику качества
-        if self.stats['quality_checks'] > 0:
-            print(f"\n📊 СТАТИСТИКА КАЧЕСТВА:")
-            print(f"   🔍 Проверок качества: {self.stats['quality_checks']}")
-            print(f"   ❌ Неудачных проверок: {self.stats['failed_quality_checks']}")
+    def merge_streams(self, old_streams: list, new_streams: list) -> list:
+        merged = {}
+        for stream in old_streams:
+            url = stream.get('url', '')
+            if url and url not in merged:
+                merged[url] = stream
+        for stream in new_streams:
+            url = stream.get('url', '')
+            if url:
+                merged[url] = stream
+        result = list(merged.values())
+        result.sort(key=lambda x: x.get('quality_score', 0), reverse=True)
+        return result
+
+    # ============================================================
+    # Вспомогательные методы
+    # ============================================================
+    def get_source_name(self, url: str) -> str:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        return parsed.netloc or "unknown"
 
     def show_quality_settings(self):
-        """Показывает текущие настройки качества"""
-        print("\n⚙️  ТЕКУЩИЕ НАСТРОЙКИ КАЧЕСТВА:")
-        print(f"   📊 Глубокая проверка: {'ВКЛ' if self.enable_deep_check else 'ВЫКЛ'}")
-        print(f"   ⏱️  Длительность проверки: {self.check_duration} секунд")
-        print(f"   📶 Минимальный битрейт: {self.required_bitrate} kbps")
-        print(f"   📏 Минимальное разрешение: {self.min_video_resolution}p")
-        print(f"   ⚡ Минимальный FPS: {self.required_fps}")
-        print(f"   ⏰ Таймаут проверки: {self.check_timeout} секунд")
+        print("\n📊 Настройки качества:")
+        print(f"   Глубокая проверка: {self.quality_analyzer.enable_deep_check}")
+        print(f"   Длительность проверки: {self.quality_analyzer.check_duration} сек")
+        print(f"   Мин. битрейт: {self.quality_analyzer.required_bitrate} Kbps")
+        print(f"   Мин. разрешение: {self.quality_analyzer.min_video_resolution}p")
+        print(f"   Мин. FPS: {self.quality_analyzer.required_fps}")
+        print(f"   Таймаут: {self.quality_analyzer.check_timeout} сек")
 
     def update_quality_settings(self):
-        """Обновляет настройки качества"""
-        print("\n⚙️  ОБНОВЛЕНИЕ НАСТРОЕК КАЧЕСТВА:")
-
+        print("\n⚙️ Обновление настроек качества (оставьте пустым для пропуска):")
         try:
-            enable = input("Включить глубокую проверку? (y/n, текущее: {}): ".format(
-                "ВКЛ" if self.enable_deep_check else "ВЫКЛ"
-            )).strip().lower()
-            if enable in ['y', 'yes', 'да']:
-                self.enable_deep_check = True
-            elif enable in ['n', 'no', 'нет']:
-                self.enable_deep_check = False
+            val = input(f"Глубокая проверка (y/n) [{self.quality_analyzer.enable_deep_check}]: ").strip().lower()
+            if val == 'y':
+                self.quality_analyzer.enable_deep_check = True
+            elif val == 'n':
+                self.quality_analyzer.enable_deep_check = False
 
-            duration = input("Длительность проверки (секунды, текущее: {}): ".format(
-                self.check_duration
-            )).strip()
-            if duration.isdigit() and 1 <= int(duration) <= 30:
-                self.check_duration = int(duration)
+            val = input(f"Длительность проверки (сек) [{self.quality_analyzer.check_duration}]: ").strip()
+            if val:
+                self.quality_analyzer.check_duration = int(val)
 
-            bitrate = input("Минимальный битрейт (kbps, текущее: {}): ".format(
-                self.required_bitrate
-            )).strip()
-            if bitrate.isdigit() and 100 <= int(bitrate) <= 10000:
-                self.required_bitrate = int(bitrate)
+            val = input(f"Мин. битрейт (Kbps) [{self.quality_analyzer.required_bitrate}]: ").strip()
+            if val:
+                self.quality_analyzer.required_bitrate = int(val)
 
-            print("✅ Настройки обновлены")
-        except:
-            print("❌ Ошибка обновления настроек")
+            val = input(f"Мин. разрешение (p) [{self.quality_analyzer.min_video_resolution}]: ").strip()
+            if val:
+                self.quality_analyzer.min_video_resolution = int(val)
 
-def interactive_mode():
-    """Интерактивный режим"""
-    scanner = OnlineM3UScanner()
+            val = input(f"Мин. FPS [{self.quality_analyzer.required_fps}]: ").strip()
+            if val:
+                self.quality_analyzer.required_fps = int(val)
 
-    print("🎬" + "=" * 70)
-    print("🌐 SMART M3U SCANNER С АНАЛИЗОМ КАЧЕСТВА")
-    print("🎯 РАБОТАЕТ С ФАЙЛАМИ:")
-    print(f"   📁 {scanner.sites_file} - источники для поиска")
-    print(f"   📁 {scanner.cartolog_file} - категории каналов")
-    print(f"   📁 {scanner.channels_file} - список каналов для поиска")
-    print("🎬" + "=" * 70)
+            print("✅ Настройки обновлены!")
+        except ValueError:
+            print("❌ Ошибка: введите число")
 
-    # Проверяем файлы
-    if not scanner.custom_sites:
-        print("❌ Нет сайтов для поиска! Добавьте URLs в files/site.txt")
-        return
+    def show_format_settings(self):
+        """Показать текущие настройки форматов"""
+        print("\n📋 Настройки форматов:")
+        print(f"   M3U:  {'✅ Включено' if self.scan_m3u else '❌ Отключено'}")
+        print(f"   M3U8: {'✅ Включено' if self.scan_m3u8 else '❌ Отключено'}")
 
-    if not scanner.channels_list:
-        print("❌ Нет каналов для поиска! Добавьте каналы в files/Channels.txt")
-        return
+    def update_format_settings(self):
+        """Интерактивное меню выбора форматов"""
+        print("\n⚙️ Выбор форматов для поиска:")
+        print(f"   [1] M3U  — {'✅ ВКЛ' if self.scan_m3u else '❌ ВЫКЛ'}")
+        print(f"   [2] M3U8 — {'✅ ВКЛ' if self.scan_m3u8 else '❌ ВЫКЛ'}")
+        print(f"   [3] Включить оба")
+        print(f"   [4] Выключить оба")
+        print(f"   [0] Назад")
 
-    print(f"📊 Загружено:")
-    print(f"   🌐 {len(scanner.custom_sites)} сайтов из site.txt")
-    print(f"   📂 {len(scanner.channel_categories)} категорий из cartolog.txt")
-    print(f"   📺 {len(scanner.channels_list)} каналов из Channels.txt")
-
-    # Проверяем ffmpeg
-    if scanner.ffmpeg_path:
-        print(f"✅ FFmpeg обнаружен: {scanner.ffmpeg_path}")
-        if scanner.enable_deep_check:
-            print("🔍 Расширенный анализ качества: ВКЛ")
-        else:
-            print("🔍 Расширенный анализ качества: ВЫКЛ")
-    else:
-        print("ℹ️  FFmpeg не найден - используется базовая проверка")
-
-    existing_channels = scanner.load_existing_channels()
-    if existing_channels:
-        total_streams = sum(len(streams) for streams in existing_channels.values())
-        high_quality = sum(1 for streams in existing_channels.values()
-                           for s in streams if s.get('quality') in ['high', 'medium'])
-        print(f"📊 В плейлисте: {len(existing_channels)} каналов, {total_streams} ссылок")
-        print(f"🎯 Качественных ссылок: {high_quality}")
-    else:
-        print("📝 Плейлист будет создан при первом поиске")
-
-    while True:
-        print("\n" + "🎯" + "=" * 60)
-        print("1. 🔍 Поиск одного канала")
-        print("2. 📋 Поиск по списку из Channels.txt")
-        print("3. 🔄 Обновить все каналы")
-        print("4. ⚙️  Настройки качества")
-        print("5. 📊 Статистика")
-        print("6. 🚪 Выход")
-
-        choice = input("\nВыберите действие (1-6): ").strip()
+        choice = input("Выберите: ").strip()
 
         if choice == '1':
-            channel_name = input("📺 Введите название канала: ").strip()
+            self.scan_m3u = not self.scan_m3u
+            print(f"   M3U: {'✅ ВКЛЮЧЕН' if self.scan_m3u else '❌ ВЫКЛЮЧЕН'}")
+        elif choice == '2':
+            self.scan_m3u8 = not self.scan_m3u8
+            print(f"   M3U8: {'✅ ВКЛЮЧЕН' if self.scan_m3u8 else '❌ ВЫКЛЮЧЕН'}")
+        elif choice == '3':
+            self.scan_m3u = True
+            self.scan_m3u8 = True
+            print("   ✅ Оба формата включены")
+        elif choice == '4':
+            self.scan_m3u = False
+            self.scan_m3u8 = False
+            print("   ❌ Оба формата выключены")
+        elif choice == '0':
+            return
+        else:
+            print("   ❌ Неверный выбор")
+
+
+# ============================================================
+# Консольный режим
+# ============================================================
+def console_mode():
+    """Интерактивное меню в консоли"""
+    scanner = OnlineM3UScanner()
+
+    while True:
+        print(f"\n{'='*50}")
+        print("🌐 SMART M3U SCANNER")
+        print(f"{'='*50}")
+        print(f"🎯 Форматы: {scanner.get_format_string()}")
+        print(f"{'='*50}")
+        print("1. 🔍 Поиск канала")
+        print("2. 📋 Поиск всех каналов (из Channels.txt)")
+        print("3. 🔄 Обновить все каналы")
+        print("4. 🌐 Проверить сайты + найти M3U/M3U8")
+        print("5. 📊 Статистика плейлиста")
+        print("6. ⚙️ Настройки качества")
+        print("7. 📋 Выбор форматов (M3U/M3U8)")
+        print("8. 📁 Открыть папку проекта")
+        print("9. ⚡ Макс. ссылок для проверки (сейчас: {})".format(scanner.max_check_urls))
+        print("10. 🔍 Режим поиска (сейчас: {})".format(scanner.search_mode))
+        print("0. 🚪 Выход")
+        print(f"{'='*50}")
+
+        choice = input("Выберите действие: ").strip()
+
+        if choice == '1':
+            channel_name = input("Введите название канала: ").strip()
             if channel_name:
                 scanner.search_and_update_channel(channel_name)
-            else:
-                print("⚠️  Введите название канала")
 
         elif choice == '2':
-            confirm = input("⚠️  Запустить поиск по списку? (y/n): ").strip().lower()
-            if confirm == 'y':
-                scanner.search_from_channels_list()
+            scanner.search_from_channels_list()
 
         elif choice == '3':
-            confirm = input("⚠️  Обновить все каналы? (y/n): ").strip().lower()
-            if confirm == 'y':
+            print("⚠️ Это займёт много времени. Продолжить? (y/n): ", end='')
+            if input().strip().lower() == 'y':
                 scanner.refresh_all_channels()
 
         elif choice == '4':
-            scanner.show_quality_settings()
-            change = input("\nИзменить настройки? (y/n): ").strip().lower()
-            if change in ['y', 'yes', 'да']:
-                scanner.update_quality_settings()
+            try:
+                threads = input("Количество потоков (по умолчанию 20): ").strip()
+                threads = int(threads) if threads else 20
+            except ValueError:
+                threads = 20
+            try:
+                timeout = input("Таймаут в секундах (по умолчанию 10): ").strip()
+                timeout = int(timeout) if timeout else 10
+            except ValueError:
+                timeout = 10
+            scanner.check_sites_and_find_m3u(threads=threads, timeout=timeout)
 
         elif choice == '5':
-            existing_channels = scanner.load_existing_channels()
-            if existing_channels:
-                total_streams = sum(len(streams) for streams in existing_channels.values())
-                high_quality = sum(1 for streams in existing_channels.values()
-                                   for s in streams if s.get('quality') in ['high', 'medium'])
-                print(f"\n📊 СТАТИСТИКА:")
-                print(f"   📁 Каналов: {len(existing_channels)}")
-                print(f"   🔗 Ссылок: {total_streams}")
-                print(f"   🎯 Качественных: {high_quality}")
-                print(f"   📡 Запросов: {scanner.stats['total_requests']}")
-                print(f"   ✅ Успешных: {scanner.stats['successful_requests']}")
-                print(f"   ❌ Неудачных: {scanner.stats['failed_requests']}")
-                print(f"   ⏱️  Среднее время: {scanner.stats['avg_response_time']:.2f}с")
-
-                if scanner.stats['quality_checks'] > 0:
-                    print(f"\n📊 СТАТИСТИКА КАЧЕСТВА:")
-                    print(f"   🔍 Проверок качества: {scanner.stats['quality_checks']}")
-                    print(f"   ❌ Неудачных: {scanner.stats['failed_quality_checks']}")
+            channels = scanner.load_existing_channels()
+            if channels:
+                total = sum(len(s) for s in channels.values())
+                print(f"\n📊 Статистика плейлиста:")
+                print(f"   📺 Каналов: {len(channels)}")
+                print(f"   🔗 Всего ссылок: {total}")
+                print(f"   📁 Источников (site.txt): {len(scanner.custom_sites)}")
             else:
-                print("📝 Плейлист пуст")
+                print("\n📝 Плейлист пуст")
+            print(f"\n📊 Статистика поиска:")
+            print(f"   🔗 Найдено M3U: {scanner.stats.get('m3u_found', 0)}")
+            print(f"   🔗 Найдено M3U8: {scanner.stats.get('m3u8_found', 0)}")
 
         elif choice == '6':
-            print("👋 Выход...")
+            scanner.show_quality_settings()
+            scanner.update_quality_settings()
+
+        elif choice == '7':
+            scanner.show_format_settings()
+            scanner.update_format_settings()
+
+        elif choice == '8':
+            try:
+                project_dir = os.path.dirname(os.path.abspath(__file__))
+                if sys.platform == "win32":
+                    os.startfile(project_dir)
+                elif sys.platform == "darwin":
+                    import subprocess
+                    subprocess.Popen(["open", project_dir])
+                else:
+                    import subprocess
+                    subprocess.Popen(["xdg-open", project_dir])
+            except:
+                print(f"📁 Папка проекта: {os.path.dirname(os.path.abspath(__file__))}")
+
+        elif choice == '9':
+            try:
+                val = input(f"Макс. ссылок [{scanner.max_check_urls}]: ").strip()
+                if val:
+                    scanner.max_check_urls = int(val)
+                    print(f"   ✅ Установлено: {scanner.max_check_urls}")
+            except ValueError:
+                print("   ❌ Введите число")
+        elif choice == '10':
+            if scanner.search_mode == "exact":
+                scanner.set_search_mode("broad")
+            else:
+                scanner.set_search_mode("exact")
+
+        elif choice == '0':
+            print("👋 До свидания!")
             break
 
         else:
-            print("⚠️  Неверный выбор")
+            print("❌ Неверный выбор")
 
-# Настройка FFmpeg
-def setup_global_ffmpeg_path():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    ffmpeg_paths = [
-        os.path.join(base_dir, 'ffmpeg', 'bin'),
-        os.path.join(base_dir, 'ffmpeg-2025-11-17-git-e94439e49b-full_build', 'bin'),
-    ]
-    for path in ffmpeg_paths:
-        if os.path.exists(path):
-            os.environ['PATH'] = path + os.pathsep + os.environ['PATH']
-            return True
-    return False
+        input("\nНажмите Enter для продолжения...")
 
-setup_global_ffmpeg_path()
 
+# ============================================================
+# Точка входа
+# ============================================================
 def main():
-    if len(sys.argv) == 1:
-        interactive_mode()
-    elif len(sys.argv) > 1 and sys.argv[1] == "--gui":
+    """
+    Точка входа.
+    py M3UScanner.py             → консольный режим
+    py M3UScanner.py --console   → консольный режим
+    py M3UScanner.py --gui       → графический интерфейс
+    """
+    if "--gui" in sys.argv:
         try:
             from Interface import main as gui_main
             gui_main()
-        except ImportError:
-            print("❌ Графический интерфейс не найден")
+        except ImportError as e:
+            print(f"❌ Ошибка импорта Interface.py: {e}")
+            print("   Убедитесь, что Interface.py находится в одной папке с M3UScanner.py")
+    elif "--console" in sys.argv or len(sys.argv) == 1:
+        console_mode()
     else:
-        print("🌐 Smart M3U Scanner с анализом качества")
         print("Использование:")
-        print("  python M3UScanner.py          - Консольный режим")
-        print("  python M3UScanner.py --gui    - Графический интерфейс")
+        print("  py M3UScanner.py             — консольный режим (по умолчанию)")
+        print("  py M3UScanner.py --console   — консольный режим")
+        print("  py M3UScanner.py --gui       — графический интерфейс")
+
 
 if __name__ == "__main__":
     main()

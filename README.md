@@ -11,25 +11,26 @@ Python https://www.python.org/  и Установить Библотики pip i
 
 
 Страктура проекта 
+check site/
 ffmpeg/
    bin/
      frmpeg.exe
      ffplay.exe
      ffprobe.exe
-  doc/
-     Все файлы
-  presets/
-     Все файлы
-  LICENSE
-  README.txt
-fles/
- cartolog.txt
- Channels.txt
- site.txt
+files/
+   cartolog.txt
+   Channels.txt
+   site.txt
 playlist/
- playlist.m3u
-M3UScanner.py 
-requirements.txt
+   playlist.m3u
+results/
+interface.py
+M3UScanner.py
+M3UUtils.py
+requremnts.txt
+SearchM3U.py
+settings.txt
+
 
 
 <img width="275" height="481" alt="image" src="https://github.com/user-attachments/assets/0354a138-f040-4229-9a37-f49bc81871c0" />

@@ -1,0 +1,10 @@
+threads=20
+timeout=10
+auto_refresh_interval=30
+site_file=C:/Users/livxb/Desktop/m3u-scanner/files/site.txt
+cartolog_file=files/cartolog.txt
+channels_file=files/Channels.txt
+scan_m3u=False
+scan_m3u8=True
+last_channel=ТНТ Music
+last_category=Музыкальные
