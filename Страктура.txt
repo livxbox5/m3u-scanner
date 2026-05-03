@@ -1,0 +1,20 @@
+project/
+│
+├── M3UScanner.py          # Основной класс и CLI/GUI
+├── M3UUtils.py            # Парсинг M3U и анализ качества
+├── SearchM3U.py           # Поиск в сети и проверка ссылок
+├── Interface.py           # Графический интерфейс (без изменений)
+├── requirements.txt
+├── README.md
+│
+├── files/
+│   ├── site.txt
+│   ├── cartolog.txt
+│   └── Channels.txt
+│
+├── playlist/
+│   └── playlist.m3u
+│
+└── ffmpeg/                # (опционально)
+    └── bin/
+        └── ffmpeg.exe
