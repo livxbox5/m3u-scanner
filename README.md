@@ -1,6 +1,8 @@
 Авто Скан Плей Листов
 ТГ канал https://t.me/NexusIPTVGroups
-Ссылка Плей лист https://github.com/livxbox5/m3u-scanner/blob/main/playlist/playlist.m3u
+Ссылка Плей лист
+          https://github.com/livxbox5/m3u-scanner/blob/main/playlist/playlist.m3u
+          https://github.com/livxbox5/m3u-scanner/blob/main/playlist/playlist.m3u8
 
 Надо скачать ffmpeg и закинуть в папку проекта https://ffmpeg.org/download.html#releases
 и надо 
