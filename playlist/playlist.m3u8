@@ -16,3 +16,5 @@
 #========================================================
 #EXTINF:-1 group-title="IPTV" tvg-name="Первый канал (4K)",Первый канал (4K)
 https://cdn-dynmedia-1.microsoft.com/is/content/microsoftcorp/CLO24-Azure-Manufacturing-16x9-1-AVS.m3u8
+#EXTINF:-1 group-title="IPTV" tvg-name="Первый ",Первый
+https://rt-vlg-saratov-htlive.cdn.ngenix.net/hls/CH_R03_OTT_VLG_SARATOV_1TV/variant.m3u8
