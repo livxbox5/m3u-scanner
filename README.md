@@ -3,7 +3,7 @@
 Ссылка Плей лист
           https://github.com/livxbox5/m3u-scanner/blob/main/playlist/playlist.m3u
           https://github.com/livxbox5/m3u-scanner/blob/main/playlist/playlist.m3u8
-            Короткая ссылка https://golnk.ru/9n0OL/playlist.m3u
+            Короткая ссылка https://clck.su/OMLav/playlist.m3u
                             https://golnk.ru/9n0OL/playlist.m3u8
 
 Надо скачать ffmpeg и закинуть в папку проекта https://ffmpeg.org/download.html#releases
