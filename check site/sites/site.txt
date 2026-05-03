@@ -1,0 +1,207 @@
+﻿
+# ==================== Официальные ИСТОЧНИКИ CDN Bonus================================
+https://cdn-01.bonus-tv.ru
+https://cdn-02.bonus-tv.ru
+https://cdn-03.bonus-tv.ru
+https://cdn-04.bonus-tv.ru
+https://cdn-05.bonus-tv.ru
+https://cdn-06.bonus-tv.ru
+https://cdn-07.bonus-tv.ru
+https://cdn-08.bonus-tv.ru
+https://cdn-09.bonus-tv.ru
+https://cdn-10.bonus-tv.ru
+https://cdn-11.bonus-tv.ru
+https://cdn-g.bonus-tv.ru
+
+# ==================== Официальные Сайты ====================
+https://smotrim.ru/
+https://2.russia.tv/  
+https://tvkultura.ru/  
+https://ctc.ru/  
+https://tnt-online.ru/  
+https://tntmusic.ru/  
+https://europaplus.ru/  
+https://bestrussia.tv/  
+https://rudetective.tv/  
+https://strashnoe.tv/  
+
+# ==================== ПОИСКОВЫЕ СИСТЕМЫ ====================
+https://yandex.ru/
+https://google.com/
+https://duckduckgo.com/
+https://bing.com/
+https://baidu.com/
+https://ecosia.org/
+
+# ==================== СОЦИАЛЬНЫЕ СЕТИ ====================
+https://vk.com/  
+https://vk.ru/  
+https://ok.ru/  
+https://telegram.org/  
+https://pinterest.com/  
+https://reddit.com/  
+https://tumblr.com/  
+
+# ==================== РОССИЙСКИЕ ПОРТАЛЫ ====================
+https://mail.ru/  
+https://rambler.ru/  
+https://km.ru/  
+https://subscribe.ru/  
+https://banki.ru/  
+https://avito.ru/  
+https://youla.ru/  
+https://cian.ru/  
+
+# ==================== IPTV И СТРИМИНГ ====================
+https://iptv-org.github.io/  
+https://iptvcat.com/  
+https://iptvindex.com/  
+
+# ==================== ТЕХНИЧЕСКИЕ И IT ====================
+https://github.com/  
+https://github.io/  
+https://sourceforge.net/  
+https://bitbucket.org/  
+https://stackoverflow.com/  
+https://stackexchange.com/  
+https://code.google.com/  
+https://pypi.org/  
+https://docker.com/  
+https://azure.microsoft.com/  
+https://cloud.google.com/  
+
+# ==================== НОВОСТНЫЕ САЙТЫ ====================
+https://rbc.ru/  
+https://lenta.ru/  
+https://ria.ru/  
+https://interfax.ru/  
+https://kommersant.ru/  
+https://vedomosti.ru/  
+https://gazeta.ru/  
+https://mk.ru/  
+https://aif.ru/  
+https://kp.ru/  
+https://ng.ru/  
+https://forbes.ru/  
+https://inc.ru/  
+
+# ==================== РАЗВЛЕКАТЕЛЬНЫЕ ПОРТАЛЫ ====================
+https://kinopoisk.ru/  
+https://ivi.ru/  
+https://start.ru/  
+https://okko.tv/  
+https://premier.one/  
+https://tvzavr.ru/  
+https://wink.ru/  
+https://kion.ru/  
+https://hulu.com/  
+https://hbo.com/  
+https://apple.com/tv/  
+
+# ==================== ФОРУМЫ И СООБЩЕСТВА ====================
+https://4pda.to/  
+https://pikabu.ru/  
+https://linux.org.ru/  
+https://opennet.ru/  
+https://habr.com/  
+https://vc.ru/  
+https://dtf.ru/  
+https://sports.ru/  
+https://fishki.net/  
+https://irecommend.ru/  
+https://sibmama.ru/  
+https://baby.ru/  
+https://woman.ru/  
+https://cosmo.ru/  
+
+# ==================== БЛОГИ И ХОСТИНГИ ====================
+https://livejournal.com/  
+https://wordpress.com/  
+https://tumblr.com/  
+https://journals.ru/  
+https://blog.mail.ru/  
+https://zen.yandex.ru/  
+https://vc.ru/  
+
+# ==================== ОБЛАЧНЫЕ ХРАНИЛИЩА ====================
+https://yadi.sk/  
+https://cloud.mail.ru/  
+https://dropbox.com/  
+https://mega.nz/  
+https://mediafire.com/  
+https://box.com/  
+https://pcloud.com/  
+https://icloud.com/  
+https://onedrive.live.com/  
+https://drive.google.com/  
+https://disk.yandex.ru/  
+https://koofr.net/
+
+# ==================== ТОРРЕНТ ТРЕКЕРЫ ====================
+https://animelayer.ru/
+https://torrentz2.eu/
+
+# ==================== ОНЛАЙН ТВ И РАДИО ====================
+https://tvtower.ru/
+https://telesputnik.ru/
+https://smotrim.ru/
+https://tvzvezda.ru/
+https://ren.tv/
+https://ntv.ru/
+https://tvkultura.ru/
+https://russia.tv/
+https://ctc.ru/
+https://tnt-online.ru/
+https://start.ru/
+https://tvigle.ru/
+
+# ==================== МЕДИАСЕРВИСЫ ====================
+https://bandcamp.com/
+https://deezer.com/
+https://spotify.com/
+https://apple.com/music/
+https://yandex.ru/music/
+https://boom.ru/
+https://pandora.com/
+
+# ==================== ОБРАЗОВАТЕЛЬНЫЕ РЕСУРСЫ ====================
+https://khanacademy.org/
+https://stepik.org/
+https://openedu.ru/
+https://universarium.org/
+https://lectoriy.mipt.ru/
+https://arzamas.academy/
+https://elementy.ru/
+https://nplus1.ru/
+https://indicator.ru/
+
+# ==================== ИГРОВЫЕ ПЛАТФОРМЫ ====================
+https://steamcommunity.com/
+https://steampowered.com/
+https://origin.com/
+https://battle.net/
+https://xbox.com/
+https://nintendo.com/
+https://twitch.tv/
+https://dlive.tv/
+
+# ==================== МЕССЕНДЖЕРЫ И ЧАТЫ ====================
+https://telegram.org/
+https://discord.com/
+https://skype.com/
+https://zoom.us/
+https://teams.microsoft.com/
+https://hangouts.google.com/
+https://icq.com/
+
+# ==================== ДОПОЛНИТЕЛЬНЫЕ ИСТОЧНИКИ ====================
+https://github.com/iptv-org/iptv
+https://github.com/freearhey/iptv
+https://github.com/EvilCult/iptv-m3u-maker
+https://github.com/Free-TV/IPTV
+https://github.com/iptv-org/awesome-iptv
+https://github.com/iptv-org/database
+https://raw.githubusercontent.com
+https://github.com
+https://iptv-org.github.io
+https://youtube.com

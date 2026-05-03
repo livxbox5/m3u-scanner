@@ -1,0 +1,198 @@
+# ==================== РАБОЧИЕ САЙТЫ (155) ====================
+# Проверено: 170 сайтов
+# Рабочих: 155 | Нерабочих: 15
+# =======================================================================
+
+﻿  # not checked
+# ==================== Официальные ИСТОЧНИКИ CDN Bonus================================
+
+# ==================== Официальные Сайты ====================
+https://smotrim.ru/  # status: 200
+https://2.russia.tv/  # status: 200
+https://tvkultura.ru/  # status: 200
+https://ctc.ru/  # status: 200
+https://tnt-online.ru/  # status: 200
+https://tntmusic.ru/  # status: 200
+https://europaplus.ru/  # status: 200
+https://bestrussia.tv/  # status: 200
+https://rudetective.tv/  # status: 200
+https://strashnoe.tv/  # status: 200
+
+# ==================== ПОИСКОВЫЕ СИСТЕМЫ ====================
+https://yandex.ru/  # status: 200
+https://google.com/  # status: 200
+https://duckduckgo.com/  # status: 200
+https://bing.com/  # status: 200
+https://baidu.com/  # status: 200
+https://ecosia.org/  # status: 200
+
+# ==================== СОЦИАЛЬНЫЕ СЕТИ ====================
+https://vk.com/  # status: 200
+https://vk.ru/  # status: 200
+https://ok.ru/  # status: 200
+https://telegram.org/  # status: 200
+https://pinterest.com/  # status: 200
+https://reddit.com/  # status: 200
+https://tumblr.com/  # status: 200
+
+# ==================== РОССИЙСКИЕ ПОРТАЛЫ ====================
+https://mail.ru/  # status: 200
+https://rambler.ru/  # status: 200
+https://km.ru/  # status: 200
+https://subscribe.ru/  # status: 200
+https://banki.ru/  # status: 200
+https://avito.ru/  # status: 200
+https://youla.ru/  # status: 200
+https://cian.ru/  # status: 200
+
+# ==================== IPTV И СТРИМИНГ ====================
+https://iptv-org.github.io/  # status: 200
+https://iptvcat.com/  # status: 200
+https://iptvindex.com/  # status: 200
+
+# ==================== ТЕХНИЧЕСКИЕ И IT ====================
+https://github.com/  # status: 200
+https://github.io/  # status: 200
+https://sourceforge.net/  # status: 200
+https://bitbucket.org/  # status: 200
+https://stackoverflow.com/  # status: 200
+https://stackexchange.com/  # status: 200
+https://code.google.com/  # status: 200
+https://pypi.org/  # status: 200
+https://docker.com/  # status: 200
+https://azure.microsoft.com/  # status: 200
+
+# ==================== НОВОСТНЫЕ САЙТЫ ====================
+https://rbc.ru/  # status: 200
+https://lenta.ru/  # status: 200
+https://ria.ru/  # status: 200
+https://interfax.ru/  # status: 200
+https://kommersant.ru/  # status: 200
+https://vedomosti.ru/  # status: 200
+https://gazeta.ru/  # status: 200
+https://mk.ru/  # status: 200
+https://aif.ru/  # status: 200
+https://kp.ru/  # status: 200
+https://ng.ru/  # status: 200
+https://forbes.ru/  # status: 200
+https://inc.ru/  # status: 200
+
+# ==================== РАЗВЛЕКАТЕЛЬНЫЕ ПОРТАЛЫ ====================
+https://kinopoisk.ru/  # status: 200
+https://ivi.ru/  # status: 200
+https://start.ru/  # status: 200
+https://okko.tv/  # status: 200
+https://premier.one/  # status: 200
+https://tvzavr.ru/  # status: 200
+https://wink.ru/  # status: 200
+https://kion.ru/  # status: 200
+https://hulu.com/  # status: 200
+https://hbo.com/  # status: 200
+https://apple.com/tv/  # status: 200
+
+# ==================== ФОРУМЫ И СООБЩЕСТВА ====================
+https://4pda.to/  # status: 200
+https://pikabu.ru/  # status: 200
+https://linux.org.ru/  # status: 200
+https://opennet.ru/  # status: 200
+https://habr.com/  # status: 200
+https://vc.ru/  # status: 200
+https://dtf.ru/  # status: 200
+https://sports.ru/  # status: 200
+https://fishki.net/  # status: 200
+https://irecommend.ru/  # status: 200
+https://sibmama.ru/  # status: 200
+https://baby.ru/  # status: 200
+https://woman.ru/  # status: 200
+https://cosmo.ru/  # status: 200
+
+# ==================== БЛОГИ И ХОСТИНГИ ====================
+https://livejournal.com/  # status: 200
+https://wordpress.com/  # status: 200
+https://tumblr.com/  # status: 200
+https://journals.ru/  # status: 200
+https://blog.mail.ru/  # status: 200
+https://zen.yandex.ru/  # status: 200
+https://vc.ru/  # status: 200
+
+# ==================== ОБЛАЧНЫЕ ХРАНИЛИЩА ====================
+https://yadi.sk/  # status: 200
+https://cloud.mail.ru/  # status: 200
+https://dropbox.com/  # status: 200
+https://mega.nz/  # status: 200
+https://mediafire.com/  # status: 200
+https://box.com/  # status: 200
+https://pcloud.com/  # status: 200
+https://icloud.com/  # status: 200
+https://onedrive.live.com/  # status: 200
+https://drive.google.com/  # status: 200
+https://disk.yandex.ru/  # status: 200
+https://koofr.net/  # status: 200
+
+# ==================== ТОРРЕНТ ТРЕКЕРЫ ====================
+https://animelayer.ru/  # status: 200
+https://torrentz2.eu/  # status: 200
+
+# ==================== ОНЛАЙН ТВ И РАДИО ====================
+https://tvtower.ru/  # status: 200
+https://telesputnik.ru/  # status: 200
+https://smotrim.ru/  # status: 200
+https://tvzvezda.ru/  # status: 200
+https://ren.tv/  # status: 200
+https://ntv.ru/  # status: 200
+https://tvkultura.ru/  # status: 200
+https://russia.tv/  # status: 200
+https://ctc.ru/  # status: 200
+https://tnt-online.ru/  # status: 200
+https://start.ru/  # status: 200
+https://tvigle.ru/  # status: 200
+
+# ==================== МЕДИАСЕРВИСЫ ====================
+https://bandcamp.com/  # status: 200
+https://deezer.com/  # status: 200
+https://spotify.com/  # status: 200
+https://apple.com/music/  # status: 200
+https://yandex.ru/music/  # status: 200
+https://boom.ru/  # status: 200
+https://pandora.com/  # status: 200
+
+# ==================== ОБРАЗОВАТЕЛЬНЫЕ РЕСУРСЫ ====================
+https://khanacademy.org/  # status: 200
+https://openedu.ru/  # status: 200
+https://universarium.org/  # status: 200
+https://lectoriy.mipt.ru/  # status: 200
+https://arzamas.academy/  # status: 200
+https://elementy.ru/  # status: 200
+https://nplus1.ru/  # status: 200
+https://indicator.ru/  # status: 200
+
+# ==================== ИГРОВЫЕ ПЛАТФОРМЫ ====================
+https://steamcommunity.com/  # status: 200
+https://steampowered.com/  # status: 200
+https://origin.com/  # status: 200
+https://battle.net/  # status: 200
+https://xbox.com/  # status: 200
+https://nintendo.com/  # status: 200
+https://twitch.tv/  # status: 200
+https://dlive.tv/  # status: 200
+
+# ==================== МЕССЕНДЖЕРЫ И ЧАТЫ ====================
+https://telegram.org/  # status: 200
+https://discord.com/  # status: 200
+https://skype.com/  # status: 200
+https://zoom.us/  # status: 200
+https://teams.microsoft.com/  # status: 200
+https://hangouts.google.com/  # status: 200
+https://icq.com/  # status: 200
+
+# ==================== ДОПОЛНИТЕЛЬНЫЕ ИСТОЧНИКИ ====================
+https://github.com/iptv-org/iptv  # status: 200
+https://github.com/freearhey/iptv  # status: 200
+https://github.com/EvilCult/iptv-m3u-maker  # status: 200
+https://github.com/Free-TV/IPTV  # status: 200
+https://github.com/iptv-org/awesome-iptv  # status: 200
+https://github.com/iptv-org/database  # status: 200
+https://raw.githubusercontent.com  # status: 200
+https://github.com  # status: 200
+https://iptv-org.github.io  # status: 200
+https://youtube.com  # status: 200

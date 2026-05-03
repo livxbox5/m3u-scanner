@@ -1,0 +1,57 @@
+# ==================== НЕРАБОЧИЕ САЙТЫ (15) ====================
+# Проверено: 170 сайтов
+# Рабочих: 155 | Нерабочих: 15
+# =======================================================================
+
+﻿  # not checked
+# ==================== Официальные ИСТОЧНИКИ CDN Bonus================================
+https://cdn-01.bonus-tv.ru  # error: HTTPConnectionPool(host='flussonic', port=8090): Max retries exceeded with url: /admin/ (Caused by NameResolutionError("HTTPConnection(host='flussonic', port=8090): Failed to resolve 'flussonic' ([Errno 11001] getaddrinfo failed)"))
+https://cdn-02.bonus-tv.ru  # error: HTTPSConnectionPool(host='cdn-02.bonus-tv.ru', port=443): Max retries exceeded with url: / (Caused by NameResolutionError("HTTPSConnection(host='cdn-02.bonus-tv.ru', port=443): Failed to resolve 'cdn-02.bonus-tv.ru' ([Errno 11001] getaddrinfo failed)"))
+https://cdn-03.bonus-tv.ru  # error: HTTPSConnectionPool(host='cdn-03.bonus-tv.ru', port=443): Max retries exceeded with url: / (Caused by NameResolutionError("HTTPSConnection(host='cdn-03.bonus-tv.ru', port=443): Failed to resolve 'cdn-03.bonus-tv.ru' ([Errno 11001] getaddrinfo failed)"))
+https://cdn-04.bonus-tv.ru  # error: HTTPSConnectionPool(host='cdn-04.bonus-tv.ru', port=443): Max retries exceeded with url: / (Caused by NameResolutionError("HTTPSConnection(host='cdn-04.bonus-tv.ru', port=443): Failed to resolve 'cdn-04.bonus-tv.ru' ([Errno 11001] getaddrinfo failed)"))
+https://cdn-05.bonus-tv.ru  # error: HTTPSConnectionPool(host='cdn-05.bonus-tv.ru', port=443): Max retries exceeded with url: / (Caused by NameResolutionError("HTTPSConnection(host='cdn-05.bonus-tv.ru', port=443): Failed to resolve 'cdn-05.bonus-tv.ru' ([Errno 11001] getaddrinfo failed)"))
+https://cdn-06.bonus-tv.ru  # error: HTTPSConnectionPool(host='cdn-06.bonus-tv.ru', port=443): Max retries exceeded with url: / (Caused by NameResolutionError("HTTPSConnection(host='cdn-06.bonus-tv.ru', port=443): Failed to resolve 'cdn-06.bonus-tv.ru' ([Errno 11001] getaddrinfo failed)"))
+https://cdn-07.bonus-tv.ru  # error: HTTPSConnectionPool(host='cdn-07.bonus-tv.ru', port=443): Max retries exceeded with url: / (Caused by NameResolutionError("HTTPSConnection(host='cdn-07.bonus-tv.ru', port=443): Failed to resolve 'cdn-07.bonus-tv.ru' ([Errno 11001] getaddrinfo failed)"))
+https://cdn-08.bonus-tv.ru  # error: HTTPSConnectionPool(host='cdn-08.bonus-tv.ru', port=443): Max retries exceeded with url: / (Caused by NameResolutionError("HTTPSConnection(host='cdn-08.bonus-tv.ru', port=443): Failed to resolve 'cdn-08.bonus-tv.ru' ([Errno 11001] getaddrinfo failed)"))
+https://cdn-09.bonus-tv.ru  # error: HTTPSConnectionPool(host='cdn-09.bonus-tv.ru', port=443): Max retries exceeded with url: / (Caused by NameResolutionError("HTTPSConnection(host='cdn-09.bonus-tv.ru', port=443): Failed to resolve 'cdn-09.bonus-tv.ru' ([Errno 11001] getaddrinfo failed)"))
+https://cdn-10.bonus-tv.ru  # error: HTTPSConnectionPool(host='cdn-10.bonus-tv.ru', port=443): Max retries exceeded with url: / (Caused by NameResolutionError("HTTPSConnection(host='cdn-10.bonus-tv.ru', port=443): Failed to resolve 'cdn-10.bonus-tv.ru' ([Errno 11001] getaddrinfo failed)"))
+https://cdn-11.bonus-tv.ru  # error: HTTPConnectionPool(host='flussonic', port=8090): Max retries exceeded with url: /admin/ (Caused by NameResolutionError("HTTPConnection(host='flussonic', port=8090): Failed to resolve 'flussonic' ([Errno 11001] getaddrinfo failed)"))
+https://cdn-g.bonus-tv.ru  # error: HTTPSConnectionPool(host='cdn-g.bonus-tv.ru', port=443): Max retries exceeded with url: / (Caused by NameResolutionError("HTTPSConnection(host='cdn-g.bonus-tv.ru', port=443): Failed to resolve 'cdn-g.bonus-tv.ru' ([Errno 11001] getaddrinfo failed)"))
+
+# ==================== Официальные Сайты ====================
+
+# ==================== ПОИСКОВЫЕ СИСТЕМЫ ====================
+
+# ==================== СОЦИАЛЬНЫЕ СЕТИ ====================
+
+# ==================== РОССИЙСКИЕ ПОРТАЛЫ ====================
+
+# ==================== IPTV И СТРИМИНГ ====================
+
+# ==================== ТЕХНИЧЕСКИЕ И IT ====================
+https://cloud.google.com/  # error: HTTPSConnectionPool(host='cloud.google.com', port=443): Max retries exceeded with url: / (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1081)')))
+
+# ==================== НОВОСТНЫЕ САЙТЫ ====================
+
+# ==================== РАЗВЛЕКАТЕЛЬНЫЕ ПОРТАЛЫ ====================
+
+# ==================== ФОРУМЫ И СООБЩЕСТВА ====================
+
+# ==================== БЛОГИ И ХОСТИНГИ ====================
+
+# ==================== ОБЛАЧНЫЕ ХРАНИЛИЩА ====================
+
+# ==================== ТОРРЕНТ ТРЕКЕРЫ ====================
+
+# ==================== ОНЛАЙН ТВ И РАДИО ====================
+
+# ==================== МЕДИАСЕРВИСЫ ====================
+
+# ==================== ОБРАЗОВАТЕЛЬНЫЕ РЕСУРСЫ ====================
+https://stepik.org/  # error: HTTPSConnectionPool(host='stepik.org', port=443): Max retries exceeded with url: / (Caused by NameResolutionError("HTTPSConnection(host='stepik.org', port=443): Failed to resolve 'stepik.org' ([Errno 11002] getaddrinfo failed)"))
+
+# ==================== ИГРОВЫЕ ПЛАТФОРМЫ ====================
+
+# ==================== МЕССЕНДЖЕРЫ И ЧАТЫ ====================
+
+# ==================== ДОПОЛНИТЕЛЬНЫЕ ИСТОЧНИКИ ====================

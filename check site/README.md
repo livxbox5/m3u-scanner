@@ -1,0 +1,27 @@
+Авто Скан Плей Листов
+ТГ канал https://t.me/NexusIPTVGroups
+Ссылка Плей лист https://github.com/livxbox5/m3u-scanner/blob/main/playlist/playlist.m3u
+
+Надо скачать ffmpeg и закинуть в папку проекта https://ffmpeg.org/download.html#releases
+и надо 
+Python https://www.python.org/  и Установить Библотики pip install -r requirements.txt
+
+Открыть CMD (Windows 10 22h2 ) или терминал (Windows 11 25h2 ) или на актуальная версиия ОС
+запуск проекта py M3UScanner.py
+
+
+Страктура проекта 
+results/
+   done.txt
+   error.txt
+site/
+   site.txt
+interface.py
+logic.py
+main.py
+requirements.txt
+
+
+
+<img width="275" height="481" alt="image" src="https://github.com/user-attachments/assets/0354a138-f040-4229-9a37-f49bc81871c0" />
+
